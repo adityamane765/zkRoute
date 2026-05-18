@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 import httpx
-from anthropic import Anthropic
+from google import genai
 from dotenv import load_dotenv
 
 from ..shared import crypto, oracle
@@ -39,8 +39,9 @@ log = logging.getLogger(__name__)
 PROVIDER_PRIVATE_KEY = os.environ["PROVIDER_AGENT_PRIVATE_KEY"]
 PROVIDER_SIGNING_KEY = os.environ["PROVIDER_SIGNING_KEY"]  # NaCl privkey hex
 
-# How long to wait before revealing (must be > 1 block on Arc)
-REVEAL_DELAY_SECONDS = 300   # 5 minutes = provider head-start window
+# How long to wait before revealing (must be > 1 block on Arc).
+# Both knobs are env-overridable so demos can move faster than the 4h/5m defaults.
+REVEAL_DELAY_SECONDS = int(os.environ.get("REVEAL_DELAY_SECONDS", "300"))     # 5m default
 SIGNAL_INTERVAL_SECONDS = int(os.environ.get("SIGNAL_INTERVAL_SECONDS", "14400"))  # 4h default
 
 SUPPORTED_ASSETS = ["ETH", "BTC"]
@@ -64,36 +65,49 @@ class ProviderAgent:
         self.account = get_account(PROVIDER_PRIVATE_KEY)
         self.commit_reveal = CommitRevealContract(self.w3, COMMIT_REVEAL_ADDRESS)
         self.signal_market = SignalMarketContract(self.w3, SIGNAL_MARKET_ADDRESS)
-        self.claude = Anthropic()
+        # Gemini reads GEMINI_API_KEY (or GOOGLE_API_KEY) from env. If neither
+        # is set, the client init below raises and the agent refuses to start
+        # — better than failing inside the signal loop.
+        self.gemini = genai.Client()
+        self.gemini_model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
         self.pending: dict[str, PendingSignal] = {}
         self.signal_history: list[dict] = []   # for ZK proof generation
 
-    # ── Strategy: Claude generates directional signal ───────────────────────
+    # ── Strategy: Gemini generates directional signal ───────────────────────
 
     async def generate_signal(self, asset: str) -> tuple[Literal[0, 1], str]:
         """
-        Calls Claude to analyze market context and return direction.
+        Calls Gemini to analyze market context and return direction.
         In production: replace with actual quant model / strategy.
         Returns (direction, rationale_private).
         """
+        import json as _json
         price = await oracle.get_price(asset)
-        response = self.claude.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=256,
-            system=(
-                "You are a quant trading signal generator. "
-                "Given current price data, return a JSON object with: "
-                '{"direction": 1 or 0, "confidence": 0.0-1.0, "rationale": "..."} '
-                "Direction 1=long, 0=short. Be concise. Only output valid JSON."
-            ),
-            messages=[{
-                "role": "user",
-                "content": f"Asset: {asset}, Current price: ${price:.2f}. Generate signal.",
-            }],
+        prompt = (
+            "You are a quant trading signal generator. "
+            "Return ONLY a JSON object with exactly: "
+            '{"direction": 1 or 0, "confidence": 0.0-1.0, "rationale": "..."} '
+            "Direction 1=long, 0=short. No prose, no markdown fences.\n\n"
+            f"Asset: {asset}\nCurrent price: ${price:.2f}\nGenerate signal."
         )
-        import json
-        data = json.loads(response.content[0].text)
-        direction = int(data["direction"])
+        # The SDK call is sync; run in a thread to avoid blocking the loop.
+        response = await asyncio.to_thread(
+            self.gemini.models.generate_content,
+            model=self.gemini_model,
+            contents=prompt,
+        )
+        text = (response.text or "").strip()
+        # Strip ``` fences if Gemini wrapped JSON in a code block.
+        if text.startswith("```"):
+            text = text.strip("`")
+            if text.lower().startswith("json"):
+                text = text[4:].lstrip()
+        try:
+            data = _json.loads(text)
+        except _json.JSONDecodeError:
+            log.warning(f"Gemini returned non-JSON ({text[:80]!r}); defaulting to LONG")
+            data = {"direction": 1, "rationale": "fallback"}
+        direction = int(data.get("direction", 1))
         rationale = data.get("rationale", "")
         log.info(f"Signal generated: {asset} {'LONG' if direction else 'SHORT'} @ ${price:.2f}")
         return direction, rationale

@@ -1,29 +1,45 @@
 {
-  "_comment": "Canonical zkRoute deployment record for Arc testnet. Update this file after every deploy. All other docs link here so addresses live in exactly one place.",
+  "_comment": "Canonical zkRoute deployment record for Arc testnet (Canteen). Update this file after every deploy. All other docs link here so addresses live in exactly one place.",
   "network": {
-    "name": "Arc Sepolia (testnet)",
-    "chainId": 421614,
-    "rpcUrl": "https://rpc.arc.network",
-    "wsUrl": "wss://rpc.arc.network",
-    "explorer": "https://explorer.arc.network",
-    "faucet": "https://faucet.arc.network",
-    "_note": "Verify these against the official Circle/Arc docs at https://developers.circle.com/arc — values are placeholders until you confirm against your environment."
+    "name": "Arc Testnet (Canteen)",
+    "chainId": 5042002,
+    "rpcUrl": "<run: arc-canteen rpc-url>",
+    "explorer": "https://docs.arc.io/",
+    "faucet": "https://discord.gg/TGnyfKh23V",
+    "_note": "The Canteen-issued RPC URL embeds a per-user auth token (`swrm_...`). Do NOT commit that URL \u2014 keep it in your local `.env`. This file records only the public chain ID."
   },
   "contracts": {
-    "USDC":              { "address": "0x0000000000000000000000000000000000000000", "deployedAt": null, "_status": "TODO — usually pre-deployed by Circle on Arc testnet, set from Circle docs" },
-    "ProviderRegistry":  { "address": "0x0000000000000000000000000000000000000000", "deployedAt": null, "_status": "TODO — fill after `npm run deploy:arc`" },
-    "CommitReveal":      { "address": "0x0000000000000000000000000000000000000000", "deployedAt": null, "_status": "TODO — fill after `npm run deploy:arc`" },
-    "Verifier":          { "address": "0x0000000000000000000000000000000000000000", "deployedAt": null, "_status": "TODO — STUB by default. Replace with real Groth16 verifier after running `circuits/npm run setup`." },
-    "SignalMarket":      { "address": "0x0000000000000000000000000000000000000000", "deployedAt": null, "_status": "TODO — fill after `npm run deploy:arc`" }
+    "USDC": {
+      "address": "0x999f73DeA290960Afbd2f6e582F48bEfdFfDB6Ed",
+      "deployedAt": "2026-05-19T00:50:00Z",
+      "_status": "MockERC20 \u2014 deployed because no canonical Arc USDC address was supplied. Replace with the real Circle USDC once you have it."
+    },
+    "ProviderRegistry": {
+      "address": "0x932Cb43D99e1CFB5D275Be0c87FA3313f76a6aeE",
+      "deployedAt": "2026-05-19T00:50:00Z"
+    },
+    "CommitReveal": {
+      "address": "0x6e6c34e5781D45C5b0c91ecf258EAfaccc52fCDe",
+      "deployedAt": "2026-05-19T00:50:00Z"
+    },
+    "Verifier": {
+      "address": "0x403Fe0408976b518b2952BdF590135Ec6ba12ebc",
+      "deployedAt": "2026-05-18T21:03:03.794220Z",
+      "_status": "Real Groth16Verifier from circuits/build/track_record_final.zkey \u2014 swapped in via SignalMarket.setVerifier on 2026-05-19."
+    },
+    "SignalMarket": {
+      "address": "0x02c40758eB9932257F056fbB60714ccbdA8C4bd4",
+      "deployedAt": "2026-05-19T00:50:00Z"
+    }
   },
   "owner": {
-    "deployer":   "0x0000000000000000000000000000000000000000",
-    "treasury":   "0x0000000000000000000000000000000000000000",
-    "_note": "Transfer ownership to a multisig before mainnet."
+    "deployer": "0xc5b7b574EE84A9B59B475FE32Eaf908C246d3859",
+    "treasury": "0xc5b7b574EE84A9B59B475FE32Eaf908C246d3859",
+    "_note": "Owner is the deployer EOA. Transfer to a multisig before any mainnet promotion."
   },
   "circle": {
     "paymasterEndpoint": "https://api.circle.com/v1/w3s/paymaster",
-    "x402Facilitator":   "https://x402.org/facilitator",
-    "_note": "Circle account creds (CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET) live only in .env — never commit them."
+    "x402Facilitator": "https://x402.org/facilitator",
+    "_note": "Circle account creds (CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET) live only in .env \u2014 never commit them."
   }
 }

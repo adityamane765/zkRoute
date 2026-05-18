@@ -23,7 +23,11 @@ async function fixture() {
   const CR = await ethers.getContractFactory("CommitReveal");
   const cr = await CR.deploy();
 
-  const Verifier = await ethers.getContractFactory("Verifier");
+  // Use MockVerifier in unit tests so we can exercise SignalMarket logic
+  // (rate limits, root mismatches, pause) without generating real Groth16
+  // proofs each time. The real `Groth16Verifier` from snarkjs is what gets
+  // deployed by scripts/deploy.js and proven against in circuits/.
+  const Verifier = await ethers.getContractFactory("MockVerifier");
   const verifier = await Verifier.deploy();
 
   const Market = await ethers.getContractFactory("SignalMarket");

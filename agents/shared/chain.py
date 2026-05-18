@@ -32,11 +32,15 @@ def get_account(private_key: str) -> Account:
 
 
 def send_tx(w3: Web3, account: Account, tx: dict) -> str:
-    """Sign and send a transaction. Returns tx hash."""
-    tx.setdefault("chainId", ARC_CHAIN_ID)
-    tx.setdefault("nonce", w3.eth.get_transaction_count(account.address))
-    tx.setdefault("gas", 500_000)
-    tx.setdefault("gasPrice", w3.eth.gas_price)
+    """Sign and send a transaction. Returns tx hash.
+
+    `build_transaction` auto-fills chainId, gas, and EIP-1559 fee fields
+    (`maxFeePerGas` / `maxPriorityFeePerGas`) but does NOT fill nonce.
+    We must set nonce manually. We must NOT add legacy `gasPrice` — mixing
+    legacy + EIP-1559 fields makes web3.py raise "Unknown kwargs: ['gasPrice']".
+    """
+    if "nonce" not in tx:
+        tx["nonce"] = w3.eth.get_transaction_count(account.address)
     signed = account.sign_transaction(tx)
     tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
     receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
@@ -103,10 +107,12 @@ class SignalMarketContract:
             "signalCount": sub[7],
         }
 
-    def process_signal_payment(self, account: Account, provider: str) -> str:
+    def process_signal_payment(self, account: Account, provider: str, buyer: str) -> str:
+        """`account` signs the tx (must be the buyer's authorized agent or the buyer themselves).
+        `buyer` is the address that owns the subscription on-chain."""
         tx = self.contract.functions.processSignalPayment(
             Web3.to_checksum_address(provider),
-            account.address,
+            Web3.to_checksum_address(buyer),
         ).build_transaction({"from": account.address})
         return send_tx(self.w3, account, tx)
 

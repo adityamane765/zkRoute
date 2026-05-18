@@ -37,6 +37,10 @@ log = logging.getLogger(__name__)
 
 BUYER_AGENT_PRIVATE_KEY = os.environ["BUYER_AGENT_PRIVATE_KEY"]    # NaCl + ETH key
 BUYER_AGENT_NACL_PRIVKEY = os.environ["BUYER_AGENT_NACL_PRIVKEY"]  # NaCl box privkey hex
+# The address of the buyer (the human/wallet that owns the subscription).
+# The agent uses its own private key for signing, but identifies as the buyer
+# when talking to the backend and when calling SignalMarket.processSignalPayment.
+BUYER_ADDRESS = os.environ["BUYER_ADDRESS"]
 CIRCLE_API_KEY = os.environ.get("CIRCLE_API_KEY", "")
 CIRCLE_WALLET_ID = os.environ.get("CIRCLE_WALLET_ID", "")
 
@@ -68,7 +72,7 @@ class BuyerAgent:
     # ── Main loop ────────────────────────────────────────────────────────────
 
     async def run(self):
-        log.info(f"Buyer agent started. Address: {self.account.address}")
+        log.info(f"Buyer agent started. Agent={self.account.address}  Buyer={BUYER_ADDRESS}")
         await asyncio.gather(
             self._signal_poll_loop(),
             self._position_monitor_loop(),
@@ -90,7 +94,7 @@ class BuyerAgent:
 
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(
-                f"{BACKEND_URL}/signals/pending/{self.account.address}"
+                f"{BACKEND_URL}/signals/pending/{BUYER_ADDRESS}"
             )
             if resp.status_code != 200:
                 return
@@ -152,9 +156,9 @@ class BuyerAgent:
         self.open_positions[signal_id] = position
         self.risk_state.daily_var_used += estimate_var_increment(actual_size_pct)
 
-        # 4. Nanopayment on-chain
+        # 4. Nanopayment on-chain — agent signs, buyer is the principal.
         try:
-            self.signal_market.process_signal_payment(self.account, provider)
+            self.signal_market.process_signal_payment(self.account, provider, BUYER_ADDRESS)
         except Exception as e:
             log.warning(f"Nanopayment failed: {e}")
 
@@ -220,7 +224,7 @@ class BuyerAgent:
     async def _report_position_opened(self, pos: Position):
         async with httpx.AsyncClient(timeout=5) as client:
             await client.post(f"{BACKEND_URL}/buyer/positions", json={
-                "buyer": self.account.address,
+                "buyer": BUYER_ADDRESS,
                 "signal_id": pos.signal_id,
                 "provider": pos.provider,
                 "asset": pos.asset,
@@ -245,7 +249,7 @@ class BuyerAgent:
     async def _report_rejection(self, signal_id: str, provider: str, reason: str):
         async with httpx.AsyncClient(timeout=5) as client:
             await client.post(f"{BACKEND_URL}/buyer/rejections", json={
-                "buyer": self.account.address,
+                "buyer": BUYER_ADDRESS,
                 "signal_id": signal_id,
                 "provider": provider,
                 "reason": reason,

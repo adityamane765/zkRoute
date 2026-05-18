@@ -21,9 +21,14 @@ export function OrbCanvas({ scrollProgressRef, height = "100vh" }: { scrollProgr
     const grainCanvas = grainCanvasRef.current;
     const container = containerRef.current;
     if (!canvas || !grainCanvas || !container) return;
-    const ctx = canvas.getContext("2d");
-    const grainCtx = grainCanvas.getContext("2d");
-    if (!ctx || !grainCtx) return;
+    const ctxMaybe = canvas.getContext("2d");
+    const grainCtxMaybe = grainCanvas.getContext("2d");
+    if (!ctxMaybe || !grainCtxMaybe) return;
+    // Re-bind with non-null declared types — TypeScript drops control-flow
+    // narrowing across the `function render()` declaration below, so we need
+    // the variable's type itself to already be non-null.
+    const ctx: CanvasRenderingContext2D = ctxMaybe;
+    const grainCtx: CanvasRenderingContext2D = grainCtxMaybe;
 
     let stopped = false;
 

@@ -89,3 +89,5 @@ coverage/
 .cache/
 .parcel-cache/
 .turbo/
+
+.claude/    

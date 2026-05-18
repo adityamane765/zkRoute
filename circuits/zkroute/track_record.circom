@@ -1,8 +1,11 @@
 pragma circom 2.1.6;
 
-include "../../node_modules/circomlib/circuits/poseidon.circom";
-include "../../node_modules/circomlib/circuits/comparators.circom";
-include "../../node_modules/circomlib/circuits/bitify.circom";
+// Include paths are resolved relative to this .circom file. circomlib lives in
+// circuits/node_modules/ after `npm install`, so from circuits/zkroute/ that's
+// one level up.
+include "../node_modules/circomlib/circuits/poseidon.circom";
+include "../node_modules/circomlib/circuits/comparators.circom";
+include "../node_modules/circomlib/circuits/bitify.circom";
 
 /**
  * TrackRecord — proves win rate and total return over N signals

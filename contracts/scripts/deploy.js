@@ -26,16 +26,23 @@ async function main() {
   //    require a real verifier to be supplied.
   let zkVerifierAddress = process.env.ZK_VERIFIER_ADDRESS;
   if (!zkVerifierAddress) {
-    if (network.name === "arc") {
+    // The stub Verifier accepts any proof. It is safe for testnet wiring and
+    // hostile on mainnet. Require explicit opt-in via env when targeting a
+    // network that is not a local dev chain.
+    const isLocal = network.name === "localhost" || network.name === "hardhat";
+    if (!isLocal && process.env.ZKROUTE_ALLOW_STUB_VERIFIER !== "true") {
       throw new Error(
-        "ZK_VERIFIER_ADDRESS must be set when deploying to arc — stub verifier is not safe for production."
+        `ZK_VERIFIER_ADDRESS is unset and ZKROUTE_ALLOW_STUB_VERIFIER!=true on network=${network.name}. ` +
+        `Either deploy the real Verifier first (cd ../circuits && npm run setup) and set ZK_VERIFIER_ADDRESS, ` +
+        `or set ZKROUTE_ALLOW_STUB_VERIFIER=true to deploy the stub. The stub MUST NOT be used on mainnet.`
       );
     }
-    const Verifier = await ethers.getContractFactory("Verifier");
+    // snarkjs's exported Verifier.sol declares the contract as `Groth16Verifier`.
+    const Verifier = await ethers.getContractFactory("Groth16Verifier");
     const verifier = await Verifier.deploy();
     await verifier.waitForDeployment();
     zkVerifierAddress = await verifier.getAddress();
-    console.log("Verifier (STUB):", zkVerifierAddress);
+    console.log("Verifier (STUB):", zkVerifierAddress, "⚠️  SWAP BEFORE MAINNET");
   } else {
     console.log("Verifier (env):", zkVerifierAddress);
   }
