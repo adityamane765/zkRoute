@@ -54,7 +54,7 @@ export default function Home() {
         }}>
           <div style={{
             fontFamily: "'Arial Black', Arial, sans-serif",
-            fontSize: "clamp(3.5rem, 12vw, 10rem)",
+            fontSize: "clamp(2.6rem, 9vw, 7.5rem)",
             fontWeight: 900, color: "white",
             lineHeight: 1, letterSpacing: "-0.02em",
             textShadow: "0 0 80px rgba(255,255,255,0.1)",
