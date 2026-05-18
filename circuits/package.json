@@ -1,0 +1,14 @@
+{
+  "name": "zkroute-circuits",
+  "version": "1.0.0",
+  "scripts": {
+    "compile": "circom zkroute/track_record.circom --r1cs --wasm --sym -o build/",
+    "setup": "bash scripts/setup.sh",
+    "prove": "node scripts/prove.js",
+    "export-verifier": "snarkjs zkey export solidityverifier build/track_record_final.zkey ../contracts/contracts/Verifier.sol"
+  },
+  "dependencies": {
+    "circomlib": "^2.0.5",
+    "snarkjs": "^0.7.4"
+  }
+}
