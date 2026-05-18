@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+# Cancel in-flight runs for the same branch on a new push.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   contracts:
     name: Hardhat tests
@@ -14,10 +19,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: "20", cache: "npm", cache-dependency-path: contracts/package-lock.json }
-      - run: npm install --no-audit --no-fund
-      - run: npm run compile
-      - run: npm test
+        with:
+          node-version: "20"
+          # No `cache: npm` here — the lockfile isn't committed yet. Once you run
+          # `npm install` locally and commit `contracts/package-lock.json`, you
+          # can re-enable caching by adding `cache: "npm"` back.
+      - name: Install deps
+        run: npm install --no-audit --no-fund
+      - name: Compile
+        run: npm run compile
+      - name: Test
+        run: npm test
 
   backend:
     name: Backend pytest
@@ -26,9 +38,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: "3.11", cache: "pip", cache-dependency-path: backend/requirements.txt }
-      - run: pip install -r requirements.txt
-      - name: Run tests
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Test
         run: PYTHONPATH=.. pytest
 
   agents:
@@ -38,19 +54,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
-      - name: Install
-        run: pip install -e ".[dev]"
-      - name: Run tests
+        with:
+          python-version: "3.11"
+      # Install only what the tests in agents/tests/ actually import. The full
+      # pyproject extras are only needed for running the live agents, which CI
+      # doesn't do. Avoids hatchling autodetection issues from the `agents/`
+      # directory not matching the `zkroute-agents` distribution name.
+      - name: Install test deps
+        run: pip install pynacl web3 eth-account pytest pytest-asyncio python-dotenv
+      - name: Test
         run: PYTHONPATH=.. pytest
 
   frontend:
     name: Next.js build
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: frontend } }
+    env:
+      # Stub addresses for the CI build so the wagmi config validates.
+      NEXT_PUBLIC_ARC_CHAIN_ID: "421614"
+      NEXT_PUBLIC_ARC_RPC_URL: "https://rpc.arc.network"
+      NEXT_PUBLIC_BACKEND_URL: "http://localhost:8000"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: "20", cache: "npm", cache-dependency-path: frontend/package-lock.json }
-      - run: npm ci
-      - run: npm run build
+        with:
+          node-version: "20"
+      - name: Install deps
+        # `npm install` instead of `npm ci` — tolerant when the lockfile lags
+        # behind package.json (e.g. when a contributor forgets to commit it).
+        run: npm install --no-audit --no-fund
+      - name: Build
+        run: npm run build

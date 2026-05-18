@@ -1,11 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 import Link from "next/link";
 import { ConnectButton } from "../../components/ConnectButton";
 import { useProviderRegister } from "../../lib/onchain";
 import { isAddressesConfigured } from "../../lib/contracts";
+
+function useMounted() {
+  const [m, setM] = useState(false);
+  useEffect(() => { setM(true); }, []);
+  return m;
+}
 
 const FREQS = [
   { v:"HFT",             l:"hft",       s:"< 1h"      },
@@ -21,6 +27,7 @@ export default function ProviderPage() {
   const [backendStatus, setBackendStatus] = useState<"idle"|"submitting"|"done"|"error">("idle");
   const chainConfigured = isAddressesConfigured();
   const { state: chainStatus, error: chainError, txHash, submit: submitOnchain } = useProviderRegister();
+  const mounted = useMounted();
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,7 +116,7 @@ export default function ProviderPage() {
               <div>next: python -m agents.provider.agent</div>
             </div>
           </div>
-        ) : !isConnected ? (
+        ) : !mounted || !isConnected ? (
           <div className="flex flex-col items-center gap-3 py-10">
             <p className="text-sm text-[#4a5e4e]">Connect wallet to register.</p>
             <ConnectButton />

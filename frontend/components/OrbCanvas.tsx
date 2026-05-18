@@ -14,10 +14,18 @@ export function OrbCanvas({ scrollProgressRef, height = "100vh" }: { scrollProgr
   const timeRef = useRef(0);
 
   useEffect(() => {
-    const canvas = canvasRef.current!;
-    const grainCanvas = grainCanvasRef.current!;
-    const ctx = canvas.getContext("2d")!;
-    const grainCtx = grainCanvas.getContext("2d")!;
+    // All three refs are set by the time this effect runs because the JSX
+    // returns the wrapper + canvases unconditionally. Still bail early if any
+    // ref is null (defensive — e.g. React strict-mode double mount).
+    const canvas = canvasRef.current;
+    const grainCanvas = grainCanvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !grainCanvas || !container) return;
+    const ctx = canvas.getContext("2d");
+    const grainCtx = grainCanvas.getContext("2d");
+    if (!ctx || !grainCtx) return;
+
+    let stopped = false;
 
     const density = " .:-=+*#%@";
 
@@ -125,11 +133,18 @@ export function OrbCanvas({ scrollProgressRef, height = "100vh" }: { scrollProgr
     };
 
     function render() {
+      // If the effect cleanup ran after a frame was scheduled, bail before
+      // touching any (possibly null) DOM nodes.
+      if (stopped) return;
+      const containerNow = containerRef.current;
+      const canvasNow = canvasRef.current;
+      const grainNow = grainCanvasRef.current;
+      if (!containerNow || !canvasNow || !grainNow) return;
+
       timeRef.current += 0.016;
       const time = timeRef.current;
-      const container = containerRef.current!;
-      const width = canvas.width = grainCanvas.width = container.offsetWidth;
-      const height = canvas.height = grainCanvas.height = container.offsetHeight;
+      const width = canvasNow.width = grainNow.width = containerNow.offsetWidth;
+      const height = canvasNow.height = grainNow.height = containerNow.offsetHeight;
 
       ctx.clearRect(0, 0, width, height);
 
@@ -199,6 +214,7 @@ export function OrbCanvas({ scrollProgressRef, height = "100vh" }: { scrollProgr
     render();
 
     return () => {
+      stopped = true;
       cancelAnimationFrame(frameRef.current);
       ScrollTrigger.getAll().forEach(t => t.kill());
     };

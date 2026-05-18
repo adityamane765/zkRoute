@@ -6,6 +6,12 @@ import Link from "next/link";
 import { ConnectButton } from "../../components/ConnectButton";
 import { EquityCurve } from "../../components/charts/EquityCurve";
 
+function useMounted() {
+  const [m, setM] = useState(false);
+  useEffect(() => { setM(true); }, []);
+  return m;
+}
+
 interface Position {
   asset: string; direction: string; size_pct: number;
   entry_price: number; current_price: number | null;
@@ -32,6 +38,7 @@ const DEMO: Dashboard = {
 export default function Portfolio() {
   const { address, isConnected } = useAccount();
   const [data, setData] = useState<Dashboard>(DEMO);
+  const mounted = useMounted();
 
   useEffect(() => {
     if (!address) return;
@@ -51,7 +58,7 @@ export default function Portfolio() {
         <ConnectButton />
       </nav>
 
-      {!isConnected ? (
+      {!mounted || !isConnected ? (
         <div className="flex flex-col items-center gap-4 pt-40 text-center">
           <p className="text-sm text-[#4a5e4e]">Connect wallet to view your portfolio.</p>
           <ConnectButton />

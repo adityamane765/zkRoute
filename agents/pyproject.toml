@@ -19,7 +19,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-asyncio", "ruff"]
+dev = ["pytest>=8.0.0", "pytest-asyncio>=0.23.0", "ruff>=0.4.0"]
+
+# Hatchling can't autodetect packages from the dist name `zkroute-agents`
+# because there's no `zkroute_agents/` directory. Tell it explicitly that the
+# wheel should bundle `provider/`, `buyer/`, and `shared/` as top-level pkgs.
+[tool.hatch.build.targets.wheel]
+packages = ["provider", "buyer", "shared"]
 
 [tool.ruff]
 line-length = 100
