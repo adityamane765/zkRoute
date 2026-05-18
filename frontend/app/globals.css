@@ -2,129 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --green: #00ff87;
-  --green-dim: #00c96a;
-  --green-glow: rgba(0, 255, 135, 0.15);
-  --surface: rgba(255, 255, 255, 0.03);
-  --border: rgba(255, 255, 255, 0.07);
-  --border-bright: rgba(0, 255, 135, 0.25);
-}
-
 * { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
-
 body {
-  background: #080a0f;
-  color: #e8eaf0;
+  background: #090c0a;
+  color: #d4ddd6;
   font-family: var(--font-inter), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
 }
 
-/* ── Grid background ── */
-.grid-bg {
-  background-image:
-    linear-gradient(rgba(0, 255, 135, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 255, 135, 0.03) 1px, transparent 1px);
-  background-size: 40px 40px;
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
 }
+.animate-spin-slow { animation: spin-slow 24s linear infinite; }
 
-/* ── Glass card ── */
-.glass {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+@keyframes spin-reverse {
+  to { transform: rotate(-360deg); }
 }
+.animate-spin-reverse { animation: spin-reverse 18s linear infinite; }
 
-.glass-bright {
-  background: rgba(0, 255, 135, 0.04);
-  border: 1px solid var(--border-bright);
-  backdrop-filter: blur(12px);
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
+.animate-fade-up { animation: fade-up 0.5s ease-out forwards; }
+.delay-100 { animation-delay: 0.1s; opacity: 0; }
+.delay-200 { animation-delay: 0.2s; opacity: 0; }
+.delay-300 { animation-delay: 0.3s; opacity: 0; }
+.delay-400 { animation-delay: 0.4s; opacity: 0; }
+.delay-500 { animation-delay: 0.5s; opacity: 0; }
 
-/* ── ZK badge ── */
-.zk-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  background: rgba(0, 255, 135, 0.1);
-  color: #00ff87;
-  border: 1px solid rgba(0, 255, 135, 0.3);
-  text-transform: uppercase;
+@keyframes ticker {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
 }
+.ticker-track { animation: ticker 36s linear infinite; }
 
-/* ── Glow button ── */
-.btn-primary {
-  position: relative;
-  background: #00ff87;
-  color: #080a0f;
-  font-weight: 700;
-  border-radius: 8px;
-  overflow: hidden;
-  transition: all 0.2s;
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.2; }
 }
-.btn-primary::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at center, rgba(255,255,255,0.2) 0%, transparent 70%);
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-.btn-primary:hover::after { opacity: 1; }
-.btn-primary:hover { box-shadow: 0 0 30px rgba(0, 255, 135, 0.4); }
-
-.btn-ghost {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: #a0a8b8;
-  border-radius: 8px;
-  transition: all 0.2s;
-}
-.btn-ghost:hover {
-  border-color: rgba(255,255,255,0.15);
-  color: #e8eaf0;
-}
-
-/* ── Stat number ── */
-.stat-num {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-/* ── Gradient text ── */
-.text-gradient {
-  background: linear-gradient(135deg, #00ff87 0%, #00c2ff 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* ── Scrollbar ── */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
-
-/* ── Table row hover ── */
-.table-row-hover:hover { background: rgba(255, 255, 255, 0.02); }
-
-/* ── Frequency pill ── */
-.freq-pill {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  padding: 2px 8px;
-  border-radius: 20px;
-  text-transform: uppercase;
-}
+.blink { animation: blink 1.6s ease-in-out infinite; }

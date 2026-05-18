@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Search, SlidersHorizontal } from "lucide-react";
-import { ProviderCard } from "../../components/ProviderCard";
+import Link from "next/link";
 import { SubscribeModal } from "../../components/SubscribeModal";
+import { ConnectButton } from "../../components/ConnectButton";
 
 interface Provider {
   address: string;
@@ -17,165 +16,120 @@ interface Provider {
   last_proof_block: number | null;
 }
 
-const FREQ_FILTERS = [
-  { value: "all", label: "All" },
-  { value: "Swing", label: "Swing" },
-  { value: "MediumFrequency", label: "Med-Freq" },
-  { value: "Intraday", label: "Intraday" },
-  { value: "HFT", label: "HFT" },
+const DEMO: Provider[] = [
+  { address:"0x1111111111111111111111111111111111111111", name:"ETH Momentum Alpha",   description:"Medium-frequency ETH strategy targeting momentum regime shifts.",              frequency:"MediumFrequency", win_rate_bps:6800, total_return_bps:2340, total_signals:47,  last_proof_block:100000 },
+  { address:"0x2222222222222222222222222222222222222222", name:"BTC Swing Desk",        description:"Multi-day BTC swing trades based on on-chain analytics and macro data.",     frequency:"Swing",           win_rate_bps:5900, total_return_bps:1820, total_signals:23,  last_proof_block:99800  },
+  { address:"0x3333333333333333333333333333333333333333", name:"Multi-Asset Intraday",  description:"High-cadence signals across ETH and BTC. Sub-4h holding periods.",          frequency:"Intraday",        win_rate_bps:6200, total_return_bps:890,  total_signals:134, last_proof_block:100100 },
+  { address:"0x4444444444444444444444444444444444444444", name:"Macro Quant",           description:"Macro-driven directional bets. Fed policy, stablecoin flows, positioning.", frequency:"Macro",           win_rate_bps:null, total_return_bps:null, total_signals:null,last_proof_block:null   },
 ];
 
-const DEMO_PROVIDERS: Provider[] = [
-  {
-    address: "0x1111111111111111111111111111111111111111",
-    name: "ETH Momentum Alpha",
-    description: "Medium-frequency ETH strategy targeting momentum regime shifts. Tuned on 3 years of order-flow data.",
-    frequency: "MediumFrequency",
-    win_rate_bps: 6800,
-    total_return_bps: 2340,
-    total_signals: 47,
-    last_proof_block: 100000,
-  },
-  {
-    address: "0x2222222222222222222222222222222222222222",
-    name: "BTC Swing Desk",
-    description: "Multi-day BTC swing trades based on on-chain analytics and macro indicators. Low frequency, high conviction.",
-    frequency: "Swing",
-    win_rate_bps: 5900,
-    total_return_bps: 1820,
-    total_signals: 23,
-    last_proof_block: 99800,
-  },
-  {
-    address: "0x3333333333333333333333333333333333333333",
-    name: "Multi-Asset Intraday",
-    description: "High-cadence signals across ETH and BTC. Tight execution windows, sub-4h holding periods.",
-    frequency: "Intraday",
-    win_rate_bps: 6200,
-    total_return_bps: 890,
-    total_signals: 134,
-    last_proof_block: 100100,
-  },
-  {
-    address: "0x4444444444444444444444444444444444444444",
-    name: "Macro Quant Fund",
-    description: "Macro-driven directional bets. Fed policy, stablecoin flows, institutional positioning.",
-    frequency: "Macro",
-    win_rate_bps: null,
-    total_return_bps: null,
-    total_signals: null,
-    last_proof_block: null,
-  },
-];
+const FREQ_LABEL: Record<string,string> = {
+  HFT:"hft", Intraday:"intraday", MediumFrequency:"med-freq", Swing:"swing", Macro:"macro",
+};
 
 export default function Marketplace() {
-  const [providers, setProviders] = useState<Provider[]>(DEMO_PROVIDERS);
-  const [filter, setFilter] = useState("all");
-  const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<Provider | null>(null);
-  const [sortBy, setSortBy] = useState<"winRate" | "return" | "signals">("winRate");
+  const [providers, setProviders] = useState<Provider[]>(DEMO);
+  const [search, setSearch]       = useState("");
+  const [selected, setSelected]   = useState<Provider | null>(null);
 
   useEffect(() => {
     const url = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
-    fetch(`${url}/providers/`)
-      .then((r) => r.json())
-      .then((data) => { if (data?.length) setProviders(data); })
-      .catch(() => {});
+    fetch(`${url}/providers/`).then(r => r.json())
+      .then(d => { if (d?.length) setProviders(d); }).catch(() => {});
   }, []);
 
-  const filtered = providers
-    .filter((p) => filter === "all" || p.frequency === filter)
-    .filter((p) => !search || p.name.toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => {
-      if (sortBy === "winRate") return (b.win_rate_bps ?? -1) - (a.win_rate_bps ?? -1);
-      if (sortBy === "return") return (b.total_return_bps ?? -Infinity) - (a.total_return_bps ?? -Infinity);
-      return (b.total_signals ?? -1) - (a.total_signals ?? -1);
-    });
+  const q = search.trim().toLowerCase();
+  const list = q ? providers.filter(p =>
+    p.name.toLowerCase().includes(q) || p.frequency.toLowerCase().includes(q)
+  ) : providers;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-10 relative z-10">
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="mb-8"
-      >
-        <h1 className="text-3xl font-bold mb-1">Signal Marketplace</h1>
-        <p className="text-gray-500 text-sm">
-          All stats ZK-proven on Arc. Strategies are never revealed — only your agent decrypts.
-        </p>
-      </motion.div>
+    <div className="min-h-screen bg-[#090c0a] text-[#d4ddd6]">
 
-      {/* Controls */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        {/* Search */}
-        <div className="relative flex-1 max-w-xs">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search providers..."
-            className="w-full bg-white/[0.03] border border-white/[0.07] rounded-lg pl-8 pr-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-[rgba(0,255,135,0.3)] transition-colors"
-          />
+      <nav className="border-b border-[#0f1a11] px-8 py-4 flex items-center justify-between">
+        <Link href="/" className="font-mono text-xs text-[#2d3d30] hover:text-[#52e07c] transition-colors">← zkRoute</Link>
+        <div className="flex items-center gap-4">
+          <Link href="/provider" className="font-mono text-xs text-[#2d3d30] hover:text-[#52e07c] transition-colors">list strategy →</Link>
+          <ConnectButton />
+        </div>
+      </nav>
+
+      <div className="mx-auto max-w-2xl px-8 py-14">
+
+        {/* header */}
+        <div className="mb-10">
+          <p className="mb-2 font-mono text-[10px] tracking-[0.2em] text-[#2d3d30] uppercase">ZK-verified · Arc · USDC</p>
+          <h1 className="text-2xl font-bold text-white">Signal Marketplace</h1>
+          <p className="mt-1 text-sm text-[#4a5e4e]">
+            {list.length} provider{list.length !== 1 ? "s" : ""} · strategies never revealed
+          </p>
         </div>
 
-        {/* Frequency filter */}
-        <div className="flex gap-1.5 flex-wrap">
-          {FREQ_FILTERS.map((f) => (
-            <button
-              key={f.value}
-              onClick={() => setFilter(f.value)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                filter === f.value
-                  ? "bg-[#00ff87] text-black shadow-green-sm"
-                  : "bg-white/[0.03] border border-white/[0.07] text-gray-400 hover:text-white hover:border-white/[0.15]"
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+        {/* search */}
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="search providers..."
+          className="mb-8 w-full rounded-xl border border-[#162018] bg-[#0c110d] px-4 py-3 font-mono text-sm text-[#c4d4c6] placeholder-[#1e2d20] focus:border-[#52e07c]/30 focus:outline-none transition-colors"
+        />
+
+        {/* list */}
+        <div className="flex flex-col gap-3">
+          {list.map(p => {
+            const hasProof = p.last_proof_block != null;
+            const wr  = p.win_rate_bps    != null ? (p.win_rate_bps / 100).toFixed(1)    : null;
+            const ret = p.total_return_bps != null ? (p.total_return_bps / 100).toFixed(1) : null;
+            const up  = (p.total_return_bps ?? 0) >= 0;
+
+            return (
+              <div key={p.address}
+                className="group rounded-2xl border border-[#0f1a11] bg-[#0c110d] p-5 transition-colors duration-200 hover:border-[#1a2d1c]">
+
+                {/* top row */}
+                <div className="mb-3 flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="mb-1 flex items-center gap-2">
+                      <span className="font-mono text-[10px] text-[#1e2d20]">
+                        {p.address.slice(0,6)}…{p.address.slice(-4)}
+                      </span>
+                      {hasProof && (
+                        <span className="rounded border border-[#52e07c]/20 px-1.5 py-0.5 font-mono text-[9px] tracking-widest text-[#52e07c]/70 uppercase">
+                          zk proven
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm font-semibold text-white">{p.name}</div>
+                    <div className="mt-0.5 text-sm text-[#4a5e4e]">{p.description}</div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <div className="font-mono text-sm font-semibold text-[#52e07c]">$0.01</div>
+                    <div className="font-mono text-[10px] text-[#1e2d20]">per signal</div>
+                  </div>
+                </div>
+
+                {/* bottom row */}
+                <div className="flex items-center justify-between border-t border-[#0f1a11] pt-3">
+                  <div className="flex items-center gap-4 font-mono text-[11px]">
+                    <span className="text-[#1e2d20]">{FREQ_LABEL[p.frequency] ?? p.frequency}</span>
+                    {wr  && <span className="text-[#3a5040]">{wr}% win</span>}
+                    {ret && <span className={up ? "text-[#52e07c]" : "text-red-400/70"}>{up?"+":""}{ret}%</span>}
+                    {p.total_signals && <span className="text-[#1e2d20]">{p.total_signals} signals</span>}
+                  </div>
+                  <button
+                    onClick={() => setSelected(p)}
+                    className="font-mono text-xs text-[#2d3d30] transition-colors hover:text-[#52e07c]">
+                    subscribe →
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
 
-        {/* Sort */}
-        <div className="flex items-center gap-2 ml-auto">
-          <SlidersHorizontal size={12} className="text-gray-600" />
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-            className="bg-white/[0.03] border border-white/[0.07] rounded-lg px-2 py-1.5 text-xs text-gray-400 focus:outline-none focus:border-[rgba(0,255,135,0.3)]"
-          >
-            <option value="winRate">Sort: Win Rate</option>
-            <option value="return">Sort: Return</option>
-            <option value="signals">Sort: Signals</option>
-          </select>
-        </div>
+        {list.length === 0 && (
+          <p className="font-mono text-sm text-[#1e2d20]">no results for &quot;{search}&quot;</p>
+        )}
       </div>
-
-      {/* Grid */}
-      <AnimatePresence mode="popLayout">
-        <motion.div
-          layout
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
-        >
-          {filtered.map((p, i) => (
-            <motion.div
-              key={p.address}
-              layout
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.3, delay: i * 0.05 }}
-            >
-              <ProviderCard provider={p} onSubscribe={() => setSelected(p)} />
-            </motion.div>
-          ))}
-        </motion.div>
-      </AnimatePresence>
-
-      {filtered.length === 0 && (
-        <div className="text-center text-gray-600 py-20 text-sm">No providers match your filters.</div>
-      )}
 
       {selected && <SubscribeModal provider={selected} onClose={() => setSelected(null)} />}
     </div>

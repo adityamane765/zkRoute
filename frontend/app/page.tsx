@@ -1,233 +1,177 @@
 "use client";
 
+import { useRef } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { ArrowRight, Shield, Zap, Lock, TrendingUp, Activity } from "lucide-react";
-import { GlowCard } from "../components/ui/GlowCard";
-import { LiveTicker } from "../components/LiveTicker";
-import { AgentFlowDiagram } from "../components/AgentFlowDiagram";
-
-const FEATURES = [
-  {
-    icon: Shield,
-    title: "ZK-Proven Track Records",
-    body: "Win rates and returns are verified on-chain with Groth16 proofs. Not screenshots. Not self-reported.",
-    color: "text-[#00ff87]",
-    bg: "bg-[rgba(0,255,135,0.08)]",
-  },
-  {
-    icon: Lock,
-    title: "Encrypted Execution",
-    body: "Signals are encrypted to your buyer agent's public key. You see positions and PnL — never raw signal logic.",
-    color: "text-[#00c2ff]",
-    bg: "bg-[rgba(0,194,255,0.08)]",
-  },
-  {
-    icon: Zap,
-    title: "Arc Nanopayments",
-    body: "$0.01 per signal. No volatile gas. Instant USDC settlement on Arc's sub-second L1.",
-    color: "text-amber-400",
-    bg: "bg-amber-400/10",
-  },
-  {
-    icon: Activity,
-    title: "Commit-Reveal Integrity",
-    body: "Every signal hash-committed on-chain before market moves. Backdating is cryptographically impossible.",
-    color: "text-[#00ff87]",
-    bg: "bg-[rgba(0,255,135,0.08)]",
-  },
-  {
-    icon: TrendingUp,
-    title: "Risk-Bounded Agent",
-    body: "Set position limits, leverage caps, daily VaR, and allowed assets. Agent rejects anything outside bounds.",
-    color: "text-[#00c2ff]",
-    bg: "bg-[rgba(0,194,255,0.08)]",
-  },
-  {
-    icon: Shield,
-    title: "Provably Non-Fakeable",
-    body: "Provider bonds slashed for fraudulent proofs. Cryptographic guarantees, not trust.",
-    color: "text-amber-400",
-    bg: "bg-amber-400/10",
-  },
-];
-
-const STATS = [
-  { label: "Per-signal cost", value: "$0.01", sub: "in USDC on Arc" },
-  { label: "Finality", value: "<1s", sub: "sub-second commits" },
-  { label: "ZK proof time", value: "~8s", sub: "Groth16 locally" },
-  { label: "Strategy privacy", value: "100%", sub: "never revealed" },
-];
+import { OrbCanvas } from "../components/OrbCanvas";
+import { Ticker } from "../components/Ticker";
 
 export default function Home() {
+  const scrollProgressRef = useRef(0);
+
   return (
-    <div className="relative z-10">
+    <div style={{ background: "#000", color: "#fff" }}>
 
-      {/* ── HERO ── */}
-      <section
-        className="relative flex flex-col items-center justify-center px-6 text-center overflow-hidden pt-20 pb-20"
-        style={{ minHeight: "calc(100vh - 56px)" }}
-      >
-        {/* glow orbs */}
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(ellipse 80% 50% at 50% 30%, rgba(0,255,135,0.07) 0%, transparent 70%), radial-gradient(ellipse 60% 40% at 30% 70%, rgba(0,194,255,0.05) 0%, transparent 70%)",
+      {/* ── sticky canvas hero (100vh, scrolls away naturally) ── */}
+      <div style={{ position: "relative", height: "200vh" }}>
+
+        <OrbCanvas scrollProgressRef={scrollProgressRef} />
+
+        {/* nav — fixed over canvas */}
+        <nav style={{
+          position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
+          padding: "1.5rem 2rem",
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          background: "rgba(0,0,0,0.15)",
+        }}>
+          {/* logo mark */}
+          <div style={{
+            width: 28, height: 28, borderRadius: "50%",
+            border: "1.5px solid rgba(82,224,124,0.5)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <div style={{ width: 10, height: 10, borderRadius: "50%", background: "rgba(82,224,124,0.8)" }} />
+          </div>
+
+          {/* links */}
+          <div style={{ display: "flex", gap: "2rem", fontFamily: "monospace", fontSize: 11,
+            letterSpacing: "1px", textTransform: "uppercase" }}>
+            <Link href="/marketplace" style={{ color: "rgba(255,255,255,0.7)", textDecoration: "none" }}
+              onMouseEnter={e => (e.currentTarget.style.color = "#52e07c")}
+              onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.7)")}>
+              marketplace
+            </Link>
+            <Link href="/provider" style={{ color: "rgba(255,255,255,0.7)", textDecoration: "none" }}
+              onMouseEnter={e => (e.currentTarget.style.color = "#52e07c")}
+              onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.7)")}>
+              providers
+            </Link>
+            <Link href="/buyer" style={{ color: "rgba(255,255,255,0.7)", textDecoration: "none" }}
+              onMouseEnter={e => (e.currentTarget.style.color = "#52e07c")}
+              onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.7)")}>
+              portfolio
+            </Link>
+          </div>
+
+          {/* connect hint */}
+          <Link href="/buyer" style={{
+            fontFamily: "monospace", fontSize: 11, letterSpacing: "1px",
+            textTransform: "uppercase", color: "rgba(255,255,255,0.7)", textDecoration: "none",
           }}
-        />
-
-        {/* live badge */}
-        <div className="relative mb-6 inline-flex items-center gap-2 rounded-full border border-[rgba(0,255,135,0.2)] bg-[rgba(0,255,135,0.06)] px-4 py-1.5 text-[11px] font-semibold text-[#00ff87] uppercase tracking-widest">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#00ff87] animate-pulse" />
-          Powered by Arc · Settled in USDC
-        </div>
-
-        {/* headline */}
-        <h1 className="relative mb-6 text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.08] max-w-4xl">
-          Alpha you can{" "}
-          <span
-            style={{
-              background: "linear-gradient(135deg, #00ff87 0%, #00c2ff 100%)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-            }}
-          >
-            verify.
-          </span>
-          <br />
-          Strategies you never see.
-        </h1>
-
-        {/* sub */}
-        <p className="relative mb-8 max-w-2xl text-lg text-gray-400 leading-relaxed">
-          Agent-to-agent signal marketplace. Track records are ZK-proven on Arc.
-          Your autonomous agent executes trades — you see PnL, never the raw signal.
-          Reverse-engineering becomes computationally intractable.
-        </p>
-
-        {/* CTAs */}
-        <div className="relative flex flex-wrap gap-3 justify-center mb-12">
-          <Link
-            href="/marketplace"
-            className="flex items-center gap-2 rounded-lg bg-[#00ff87] px-7 py-3 text-sm font-bold text-black transition-all hover:bg-[#00e87a] hover:shadow-[0_0_30px_rgba(0,255,135,0.35)]"
-          >
-            Browse Providers <ArrowRight size={15} />
+            onMouseEnter={e => (e.currentTarget.style.color = "#52e07c")}
+            onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.7)")}>
+            + connect
           </Link>
-          <Link
-            href="/provider"
-            className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-7 py-3 text-sm font-semibold text-gray-300 transition-all hover:border-white/20 hover:text-white"
-          >
-            List Your Strategy
-          </Link>
-        </div>
+        </nav>
 
-        {/* stats strip */}
-        <div className="relative w-full max-w-2xl overflow-hidden rounded-xl border border-white/[0.06]">
-          <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-white/[0.06]">
-            {STATS.map((s) => (
-              <div key={s.label} className="flex flex-col items-center gap-1 bg-white/[0.02] px-4 py-5">
-                <div className="font-mono text-2xl font-bold text-[#00ff87]">{s.value}</div>
-                <div className="text-[10px] uppercase tracking-widest text-gray-500">{s.label}</div>
-                <div className="text-[10px] text-gray-700">{s.sub}</div>
-              </div>
-            ))}
+        {/* big wordmark — fixed bottom 15%, fades on scroll */}
+        <div style={{
+          position: "fixed", bottom: "15%", left: 0, right: 0, zIndex: 50,
+          pointerEvents: "none", textAlign: "center",
+        }}>
+          <div style={{
+            fontFamily: "'Arial Black', Arial, sans-serif",
+            fontSize: "clamp(4rem, 14vw, 11rem)",
+            fontWeight: 900, color: "white",
+            lineHeight: 0.85, letterSpacing: "-0.02em",
+            textShadow: "0 0 60px rgba(255,255,255,0.2)",
+          }}>
+            zkRoute
           </div>
         </div>
+
+        {/* left side text */}
+        <div style={{
+          position: "fixed", left: "2rem", top: "40%", zIndex: 50,
+          pointerEvents: "none",
+        }}>
+          <div style={{
+            fontFamily: "monospace", fontSize: 10, color: "white",
+            lineHeight: 1.7, letterSpacing: "0.5px", textTransform: "uppercase",
+            opacity: 0.6, maxWidth: 140,
+          }}>
+            signals stay<br />
+            private forever<br />
+            math proves<br />
+            the rest
+          </div>
+        </div>
+
+        {/* right side text */}
+        <div style={{
+          position: "fixed", right: "2rem", top: "40%", zIndex: 50,
+          pointerEvents: "none", textAlign: "right",
+        }}>
+          <div style={{
+            fontFamily: "monospace", fontSize: 10, color: "white",
+            lineHeight: 1.7, letterSpacing: "0.5px", textTransform: "uppercase",
+            opacity: 0.6, maxWidth: 140,
+          }}>
+            commit · encrypt<br />
+            reveal · prove<br />
+            arc · usdc<br />
+            groth16
+          </div>
+        </div>
+
+        {/* bottom-left attribution */}
+        <div style={{
+          position: "fixed", bottom: "8%", left: "2rem", zIndex: 50,
+          pointerEvents: "none",
+        }}>
+          <div style={{
+            fontFamily: "monospace", fontSize: 9, color: "white",
+            letterSpacing: "1px", textTransform: "uppercase", opacity: 0.4,
+          }}>
+            arc · circle · zk · $0.01/signal
+          </div>
+        </div>
+
+      </div>
+
+      {/* ── below the fold ── */}
+      <div style={{ background: "#090c0a" }}>
 
         {/* ticker */}
-        <div className="relative mt-10 w-full">
-          <LiveTicker />
+        <div style={{ borderTop: "1px solid #0f1a11" }}>
+          <Ticker />
         </div>
-      </section>
 
-      {/* ── HOW IT WORKS ── */}
-      <section className="mx-auto max-w-5xl px-6 py-24">
-        <div className="mb-12 text-center">
-          <h2 className="text-3xl font-bold mb-3">How it works</h2>
-          <p className="text-gray-500 max-w-xl mx-auto">
-            Two autonomous agents. One encrypted channel. Zero signal leakage.
-          </p>
-        </div>
-        <AgentFlowDiagram />
-      </section>
+        {/* how it works */}
+        <section style={{
+          margin: "0 auto", maxWidth: 560, padding: "80px 32px",
+          borderTop: "1px solid #0f1a11",
+        }}>
+          <p style={{
+            fontFamily: "monospace", fontSize: 10, letterSpacing: "0.2em",
+            textTransform: "uppercase", color: "#2d3d30", marginBottom: 32,
+          }}>how it works</p>
+          <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 28 }}>
+            {[
+              { n:"01", t:"Commit before market moves",        d:"Provider hashes signal on Arc. Sub-second finality locks the timestamp. Backdating is impossible." },
+              { n:"02", t:"Signal encrypted to your agent",    d:"NaCl box encryption. Only your buyer agent holds the private key. No human reads the signal." },
+              { n:"03", t:"Agent executes within your bounds", d:"Risk limits you set. Max position, leverage, daily VaR. Agent rejects anything out of bounds." },
+              { n:"04", t:"ZK proof verifies the record",      d:"Win rate and return proven on-chain with Groth16. Not screenshots. Not promises. Math." },
+            ].map(s => (
+              <li key={s.n} style={{ display: "flex", gap: 20 }}>
+                <span style={{ fontFamily: "monospace", fontSize: 11, color: "#1e2d20", marginTop: 2, width: 24, flexShrink: 0 }}>{s.n}</span>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 500, color: "#c4d4c6", marginBottom: 2 }}>{s.t}</div>
+                  <div style={{ fontSize: 14, color: "#4a5e4e", lineHeight: 1.6 }}>{s.d}</div>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
 
-      {/* ── FEATURES ── */}
-      <section className="mx-auto max-w-6xl px-6 py-16">
-        <div className="mb-12 text-center">
-          <h2 className="text-3xl font-bold mb-3">Built different</h2>
-          <p className="text-gray-500">Cryptographic guarantees. Not vibes.</p>
-        </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {FEATURES.map((f) => (
-            <GlowCard key={f.title} className="flex flex-col gap-3 p-5">
-              <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${f.bg}`}>
-                <f.icon size={16} className={f.color} />
-              </div>
-              <div>
-                <div className="mb-1 font-semibold text-white">{f.title}</div>
-                <div className="text-sm leading-relaxed text-gray-500">{f.body}</div>
-              </div>
-            </GlowCard>
-          ))}
-        </div>
-      </section>
+        {/* footer */}
+        <footer style={{
+          borderTop: "1px solid #0f1a11", padding: "20px 32px",
+          fontFamily: "monospace", fontSize: 9, color: "#1e2d20", textAlign: "center",
+        }}>
+          zkRoute · Arc · Circle · USDC · Groth16
+        </footer>
 
-      {/* ── CTA BANNER ── */}
-      <section className="px-6 py-24">
-        <div
-          className="relative mx-auto max-w-3xl overflow-hidden rounded-2xl border border-white/[0.06] p-12 text-center"
-          style={{
-            background:
-              "linear-gradient(135deg, rgba(0,255,135,0.04) 0%, rgba(0,194,255,0.04) 100%)",
-          }}
-        >
-          <div
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(ellipse 70% 60% at 50% 0%, rgba(0,255,135,0.08) 0%, transparent 70%)",
-            }}
-          />
-          <h2 className="relative mb-4 text-4xl font-bold">
-            Sell your edge.
-            <br />
-            <span
-              style={{
-                background: "linear-gradient(135deg, #00ff87 0%, #00c2ff 100%)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-              }}
-            >
-              Keep your strategy.
-            </span>
-          </h2>
-          <p className="relative mb-8 text-gray-400">
-            Stake 100 USDC. Subscribers pay $0.01/signal. Revenue accrues in USYC between payouts.
-            Your alpha stays yours — cryptographically.
-          </p>
-          <div className="relative flex flex-wrap justify-center gap-3">
-            <Link
-              href="/provider"
-              className="flex items-center gap-2 rounded-lg bg-[#00ff87] px-7 py-3 text-sm font-bold text-black hover:bg-[#00e87a] hover:shadow-[0_0_30px_rgba(0,255,135,0.35)] transition-all"
-            >
-              Register as Provider <ArrowRight size={14} />
-            </Link>
-            <Link
-              href="/marketplace"
-              className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-7 py-3 text-sm font-semibold text-gray-300 hover:border-white/20 hover:text-white transition-all"
-            >
-              Explore Marketplace
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* ── FOOTER ── */}
-      <footer className="border-t border-white/[0.04] px-6 py-8 text-center text-[11px] text-gray-700">
-        <span className="font-mono">zkRoute</span> · Built on Arc · Payments in USDC · ZK proofs via Groth16
-      </footer>
-
+      </div>
     </div>
   );
 }
