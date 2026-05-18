@@ -1,0 +1,29 @@
+{
+  "_comment": "Canonical zkRoute deployment record for Arc testnet. Update this file after every deploy. All other docs link here so addresses live in exactly one place.",
+  "network": {
+    "name": "Arc Sepolia (testnet)",
+    "chainId": 421614,
+    "rpcUrl": "https://rpc.arc.network",
+    "wsUrl": "wss://rpc.arc.network",
+    "explorer": "https://explorer.arc.network",
+    "faucet": "https://faucet.arc.network",
+    "_note": "Verify these against the official Circle/Arc docs at https://developers.circle.com/arc — values are placeholders until you confirm against your environment."
+  },
+  "contracts": {
+    "USDC":              { "address": "0x0000000000000000000000000000000000000000", "deployedAt": null, "_status": "TODO — usually pre-deployed by Circle on Arc testnet, set from Circle docs" },
+    "ProviderRegistry":  { "address": "0x0000000000000000000000000000000000000000", "deployedAt": null, "_status": "TODO — fill after `npm run deploy:arc`" },
+    "CommitReveal":      { "address": "0x0000000000000000000000000000000000000000", "deployedAt": null, "_status": "TODO — fill after `npm run deploy:arc`" },
+    "Verifier":          { "address": "0x0000000000000000000000000000000000000000", "deployedAt": null, "_status": "TODO — STUB by default. Replace with real Groth16 verifier after running `circuits/npm run setup`." },
+    "SignalMarket":      { "address": "0x0000000000000000000000000000000000000000", "deployedAt": null, "_status": "TODO — fill after `npm run deploy:arc`" }
+  },
+  "owner": {
+    "deployer":   "0x0000000000000000000000000000000000000000",
+    "treasury":   "0x0000000000000000000000000000000000000000",
+    "_note": "Transfer ownership to a multisig before mainnet."
+  },
+  "circle": {
+    "paymasterEndpoint": "https://api.circle.com/v1/w3s/paymaster",
+    "x402Facilitator":   "https://x402.org/facilitator",
+    "_note": "Circle account creds (CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET) live only in .env — never commit them."
+  }
+}

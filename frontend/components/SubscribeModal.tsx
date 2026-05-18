@@ -2,31 +2,68 @@
 
 import { useState } from "react";
 import { useAccount } from "wagmi";
+import { useSubscribe } from "../lib/onchain";
+import { isAddressesConfigured } from "../lib/contracts";
 
 interface Provider { address: string; name: string; }
 
 export function SubscribeModal({ provider, onClose }: { provider: Provider; onClose: () => void }) {
   const { address } = useAccount();
+  const chainConfigured = isAddressesConfigured();
   const [form, setForm] = useState({
     buyer_agent_pubkey: "",
+    buyer_agent_address: "",
+    initial_float_usdc:   "10",
     max_position_bps:  500,
     max_leverage_bps:  10000,
     daily_var_bps:     300,
   });
-  const [status, setStatus] = useState<"idle"|"submitting"|"done"|"error">("idle");
+  const [backendStatus, setBackendStatus] = useState<"idle"|"submitting"|"done"|"error">("idle");
+  const { state: chainStatus, error: chainError, txHash, submit: subscribeOnchain } = useSubscribe();
+
+  const status: "idle"|"submitting"|"done"|"error" =
+    chainStatus === "approving" || chainStatus === "submitting" || backendStatus === "submitting"
+      ? "submitting"
+      : chainStatus === "error" || backendStatus === "error"
+      ? "error"
+      : (chainConfigured ? chainStatus === "done" : backendStatus === "done") ? "done" : "idle";
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!address) return;
-    setStatus("submitting");
+
+    if (chainConfigured) {
+      const agent = form.buyer_agent_address.trim();
+      if (!/^0x[0-9a-fA-F]{40}$/.test(agent)) {
+        setBackendStatus("error");
+        return;
+      }
+      await subscribeOnchain({
+        provider: provider.address as `0x${string}`,
+        agent: agent as `0x${string}`,
+        buyerAgentPubKeyHex: form.buyer_agent_pubkey,
+        maxPositionBps: form.max_position_bps,
+        maxLeverageBps: form.max_leverage_bps,
+        dailyVarBps: form.daily_var_bps,
+        initialFloatUsdc: form.initial_float_usdc,
+      });
+    }
+    setBackendStatus("submitting");
     try {
       const url = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
       const res = await fetch(`${url}/buyer/subscribe`, {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ provider_address: provider.address, buyer_address: address, ...form }),
+        body: JSON.stringify({
+          provider_address: provider.address,
+          buyer_address: address,
+          buyer_agent_pubkey: form.buyer_agent_pubkey,
+          max_position_bps: form.max_position_bps,
+          max_leverage_bps: form.max_leverage_bps,
+          daily_var_bps: form.daily_var_bps,
+        }),
       });
-      setStatus(res.ok ? "done" : "error");
-    } catch { setStatus("error"); }
+      setBackendStatus(res.ok ? "done" : "error");
+    } catch { setBackendStatus("error"); }
   };
 
   return (
@@ -52,6 +89,9 @@ export function SubscribeModal({ provider, onClose }: { provider: Provider; onCl
               Start your buyer agent to receive signals.
               Your dashboard shows positions and PnL — never signal content.
             </p>
+            {txHash && (
+              <div className="mb-3 break-all font-mono text-[10px] text-[#2d3d30]">tx: {txHash}</div>
+            )}
             <code className="block w-full rounded-lg border border-[#0f1a11] bg-[#090c0a] px-3 py-2 font-mono text-[10px] text-[#2d3d30]">
               python -m agents.buyer.agent
             </code>
@@ -73,14 +113,40 @@ export function SubscribeModal({ provider, onClose }: { provider: Provider; onCl
                 placeholder="64 hex chars (NaCl box pubkey)" />
             </div>
 
+            {chainConfigured && (
+              <>
+                <div>
+                  <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-[#2d3d30] uppercase">
+                    Buyer agent EVM address
+                  </label>
+                  <input required value={form.buyer_agent_address}
+                    onChange={e => setForm({...form, buyer_agent_address: e.target.value})}
+                    className="w-full rounded-xl border border-[#162018] bg-[#090c0a] px-3 py-2.5 font-mono text-xs text-[#c4d4c6] placeholder-[#1e2d20] focus:border-[#52e07c]/30 focus:outline-none transition-colors"
+                    placeholder="0x... (agent's wallet, authorized to call processSignalPayment)" />
+                </div>
+                <div>
+                  <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-[#2d3d30] uppercase">
+                    Initial float (USDC)
+                  </label>
+                  <input required type="number" step="0.01" min="0.1" value={form.initial_float_usdc}
+                    onChange={e => setForm({...form, initial_float_usdc: e.target.value})}
+                    className="w-full rounded-xl border border-[#162018] bg-[#090c0a] px-3 py-2.5 font-mono text-xs text-[#c4d4c6] focus:border-[#52e07c]/30 focus:outline-none transition-colors"
+                    placeholder="10" />
+                  <p className="mt-1 font-mono text-[10px] text-[#1e2d20]">
+                    funds signal nanopayments. ~1000 signals at $0.01 each per $10.
+                  </p>
+                </div>
+              </>
+            )}
+
             {/* risk sliders */}
             <div>
               <label className="mb-2 block font-mono text-[10px] tracking-[0.2em] text-[#2d3d30] uppercase">Risk bounds</label>
               <div className="flex flex-col gap-3">
                 {[
-                  { label:"max position",  key:"max_position_bps",  min:50,    max:2000,  step:50,    div:100,   suffix:"%" },
+                  { label:"max position",  key:"max_position_bps",  min:50,    max:5000,  step:50,    div:100,   suffix:"%" },
                   { label:"max leverage",  key:"max_leverage_bps",  min:10000, max:50000, step:10000, div:10000, suffix:"x" },
-                  { label:"daily var",     key:"daily_var_bps",     min:50,    max:1000,  step:50,    div:100,   suffix:"%" },
+                  { label:"daily var",     key:"daily_var_bps",     min:50,    max:2000,  step:50,    div:100,   suffix:"%" },
                 ].map(f => {
                   const val = form[f.key as keyof typeof form] as number;
                   return (
@@ -105,11 +171,17 @@ export function SubscribeModal({ provider, onClose }: { provider: Provider; onCl
               </button>
               <button type="submit" disabled={status === "submitting"}
                 className="flex-1 rounded-lg border border-[#52e07c]/30 bg-[#52e07c]/05 py-2.5 font-mono text-xs text-[#52e07c] hover:bg-[#52e07c]/10 hover:border-[#52e07c]/50 transition-all disabled:opacity-40">
-                {status === "submitting" ? "subscribing..." : "subscribe →"}
+                {status === "submitting"
+                  ? (chainStatus === "approving" ? "approving..." : "subscribing...")
+                  : "subscribe →"}
               </button>
             </div>
 
-            {status === "error" && <p className="font-mono text-[10px] text-red-400/70">failed. try again.</p>}
+            {status === "error" && (
+              <p className="font-mono text-[10px] text-red-400/70 break-all">
+                failed{chainError ? `: ${chainError}` : ""}.
+              </p>
+            )}
           </form>
         )}
       </div>

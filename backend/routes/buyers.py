@@ -1,15 +1,24 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlmodel import Session, select, create_engine
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional
 import os
+import re
 
-from ..models import BuyerPosition, Rejection, Subscription
+from ..models import BuyerPosition, Rejection, Subscription, Provider
 
 router = APIRouter()
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./zkroute.db")
 engine = create_engine(DATABASE_URL)
+
+ADDRESS_RE = re.compile(r"^0x[0-9a-fA-F]{40}$")
+HEX64_RE = re.compile(r"^(0x)?[0-9a-fA-F]{64}$")
+
+# Same hard caps as SignalMarket.sol — keep in sync.
+MAX_POSITION_BPS = 5_000
+MAX_LEVERAGE_BPS = 10 * 10_000
+MAX_DAILY_VAR_BPS = 2_000
 
 
 def get_session():
@@ -17,20 +26,26 @@ def get_session():
         yield session
 
 
+def _checksum(addr: str) -> str:
+    if not ADDRESS_RE.match(addr):
+        raise HTTPException(400, "invalid address")
+    return addr.lower()
+
+
 class PositionOpenRequest(BaseModel):
     buyer: str
     signal_id: str
     provider: str
-    asset: str
-    direction: int
-    size_pct: float
-    entry_price: float
+    asset: str = Field(min_length=1, max_length=12)
+    direction: int = Field(ge=0, le=1)
+    size_pct: float = Field(gt=0, le=100)
+    entry_price: float = Field(gt=0)
     circle_tx_id: Optional[str] = None
     open_time: float
 
 
 class PositionUpdateRequest(BaseModel):
-    current_price: float
+    current_price: float = Field(gt=0)
     pnl_bps: int
 
 
@@ -38,49 +53,72 @@ class RejectionRequest(BaseModel):
     buyer: str
     signal_id: str
     provider: str
-    reason: str
+    reason: str = Field(min_length=1, max_length=200)
 
 
 class SubscribeRequest(BaseModel):
     provider_address: str
     buyer_address: str
     buyer_agent_pubkey: str
-    max_position_bps: int = 500     # 5%
-    max_leverage_bps: int = 10000   # 1x
-    daily_var_bps: int = 300        # 3%
+    max_position_bps: int = Field(default=500,  ge=1, le=MAX_POSITION_BPS)   # 5%
+    max_leverage_bps: int = Field(default=10000, ge=10_000, le=MAX_LEVERAGE_BPS)  # 1x..10x
+    daily_var_bps: int    = Field(default=300,  ge=1, le=MAX_DAILY_VAR_BPS)   # 3%
 
 
 @router.post("/subscribe")
 def subscribe(req: SubscribeRequest, session: Session = Depends(get_session)):
+    provider_addr = _checksum(req.provider_address)
+    buyer_addr = _checksum(req.buyer_address)
+    if not HEX64_RE.match(req.buyer_agent_pubkey):
+        raise HTTPException(400, "buyer_agent_pubkey must be 32 bytes hex")
+    provider = session.get(Provider, provider_addr)
+    if not provider or not provider.active:
+        raise HTTPException(404, "provider not active")
     existing = session.exec(
         select(Subscription).where(
-            Subscription.provider_address == req.provider_address,
-            Subscription.buyer_address == req.buyer_address,
+            Subscription.provider_address == provider_addr,
+            Subscription.buyer_address == buyer_addr,
             Subscription.active == True,
         )
     ).first()
     if existing:
         raise HTTPException(400, "Already subscribed")
     sub = Subscription(
-        provider_address=req.provider_address,
-        buyer_address=req.buyer_address,
-        buyer_agent_pubkey=req.buyer_agent_pubkey,
+        provider_address=provider_addr,
+        buyer_address=buyer_addr,
+        buyer_agent_pubkey=req.buyer_agent_pubkey.lower().removeprefix("0x"),
         max_position_bps=req.max_position_bps,
         max_leverage_bps=req.max_leverage_bps,
         daily_var_bps=req.daily_var_bps,
     )
     session.add(sub)
     session.commit()
-    return {"status": "subscribed"}
+    return {"status": "subscribed", "id": sub.id}
 
 
 @router.post("/positions")
 def open_position(req: PositionOpenRequest, session: Session = Depends(get_session)):
+    buyer = _checksum(req.buyer)
+    provider = _checksum(req.provider)
+    sub = session.exec(
+        select(Subscription).where(
+            Subscription.buyer_address == buyer,
+            Subscription.provider_address == provider,
+            Subscription.active == True,
+        )
+    ).first()
+    if not sub:
+        raise HTTPException(403, "no active subscription")
+    # Prevent duplicate positions for the same signal.
+    if session.exec(
+        select(BuyerPosition).where(BuyerPosition.signal_id == req.signal_id)
+    ).first():
+        raise HTTPException(400, "position already opened for signal")
     pos = BuyerPosition(
         signal_id=req.signal_id,
-        buyer_address=req.buyer,
-        provider_address=req.provider,
-        asset=req.asset,
+        buyer_address=buyer,
+        provider_address=provider,
+        asset=req.asset.upper(),
         direction=req.direction,
         size_pct=req.size_pct,
         entry_price=req.entry_price,
@@ -112,8 +150,9 @@ def update_position(
 
 @router.get("/positions/{buyer_address}")
 def get_positions(buyer_address: str, session: Session = Depends(get_session)):
+    buyer = _checksum(buyer_address)
     positions = session.exec(
-        select(BuyerPosition).where(BuyerPosition.buyer_address == buyer_address)
+        select(BuyerPosition).where(BuyerPosition.buyer_address == buyer)
     ).all()
     return positions
 
@@ -122,8 +161,8 @@ def get_positions(buyer_address: str, session: Session = Depends(get_session)):
 def record_rejection(req: RejectionRequest, session: Session = Depends(get_session)):
     rejection = Rejection(
         signal_id=req.signal_id,
-        buyer_address=req.buyer,
-        provider_address=req.provider,
+        buyer_address=_checksum(req.buyer),
+        provider_address=_checksum(req.provider),
         reason=req.reason,
     )
     session.add(rejection)
@@ -134,13 +173,14 @@ def record_rejection(req: RejectionRequest, session: Session = Depends(get_sessi
 @router.get("/dashboard/{buyer_address}")
 def get_dashboard(buyer_address: str, session: Session = Depends(get_session)):
     """Returns buyer dashboard data — positions and PnL, never signal content."""
+    buyer = _checksum(buyer_address)
     positions = session.exec(
-        select(BuyerPosition).where(BuyerPosition.buyer_address == buyer_address)
+        select(BuyerPosition).where(BuyerPosition.buyer_address == buyer)
     ).all()
     total_pnl_bps = sum(p.pnl_bps or 0 for p in positions)
     open_count = sum(1 for p in positions if p.closed_time is None)
     return {
-        "buyer": buyer_address,
+        "buyer": buyer,
         "open_positions": open_count,
         "total_positions": len(positions),
         "total_pnl_bps": total_pnl_bps,

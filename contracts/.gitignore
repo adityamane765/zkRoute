@@ -1,0 +1,30 @@
+# Hardhat build outputs — fully regenerable via `npm run compile`
+artifacts/
+cache/
+typechain-types/
+
+# Coverage
+coverage/
+coverage.json
+.coverage_artifacts/
+.coverage_cache/
+.coverage_contracts/
+
+# Test gas reports
+gas-report.txt
+
+# Deployment artifacts (commit to a separate deployments/ folder if you want
+# to track addresses; this default keeps ephemeral local runs out of the repo)
+deployments/localhost/
+deployments/hardhat/
+
+# Tenderly
+.tenderly/
+
+# Generated verifier from snarkjs — commit the *committed* version manually
+# after a real trusted setup. Uncomment if you want it always regenerated.
+# contracts/Verifier.sol
+
+# Local env (in addition to root)
+.env
+.env.local

@@ -23,6 +23,13 @@ from dotenv import load_dotenv
 from ..shared import crypto, oracle
 from ..shared.chain import get_web3, get_account, SignalMarketContract
 from ..shared.config import BACKEND_URL, SIGNAL_MARKET_ADDRESS
+from ..shared.risk import (
+    RiskBounds,
+    RiskState,
+    cap_size,
+    estimate_var_increment,
+    evaluate_signal,
+)
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [BUYER] %(message)s")
@@ -30,19 +37,10 @@ log = logging.getLogger(__name__)
 
 BUYER_AGENT_PRIVATE_KEY = os.environ["BUYER_AGENT_PRIVATE_KEY"]    # NaCl + ETH key
 BUYER_AGENT_NACL_PRIVKEY = os.environ["BUYER_AGENT_NACL_PRIVKEY"]  # NaCl box privkey hex
-CIRCLE_API_KEY = os.environ["CIRCLE_API_KEY"]
+CIRCLE_API_KEY = os.environ.get("CIRCLE_API_KEY", "")
 CIRCLE_WALLET_ID = os.environ.get("CIRCLE_WALLET_ID", "")
 
 POLL_INTERVAL_SECONDS = 30
-
-
-@dataclass
-class RiskBounds:
-    max_position_pct: float    # max % of portfolio per trade (e.g. 5.0)
-    max_leverage: float        # e.g. 1.0 = no leverage, 2.0 = 2x
-    allowed_assets: set[str]   # e.g. {"ETH", "BTC"}
-    daily_var_pct: float       # max % portfolio loss in a day (e.g. 3.0)
-    kill_switch: bool = False  # if True, agent rejects all signals
 
 
 @dataclass
@@ -63,9 +61,8 @@ class BuyerAgent:
         self.account = get_account(BUYER_AGENT_PRIVATE_KEY)
         self.signal_market = SignalMarketContract(self.w3, SIGNAL_MARKET_ADDRESS)
         self.risk_bounds = risk_bounds
+        self.risk_state = RiskState(day_start=time.time())
         self.open_positions: dict[str, Position] = {}
-        self.daily_var_used: float = 0.0
-        self.day_start: float = time.time()
         self.processed_signal_ids: set[str] = set()
 
     # ── Main loop ────────────────────────────────────────────────────────────
@@ -129,7 +126,9 @@ class BuyerAgent:
         )
 
         # 2. Risk validation
-        rejection = self._validate_risk(asset, size_hint_pct)
+        rejection = evaluate_signal(
+            self.risk_bounds, self.risk_state, time.time(), asset, size_hint_pct
+        )
         if rejection:
             log.info(f"Signal rejected ({rejection}): {signal_id[:10]}")
             await self._report_rejection(signal_id, provider, rejection)
@@ -137,7 +136,7 @@ class BuyerAgent:
 
         # 3. Execute trade
         entry_price = await oracle.get_price(asset)
-        actual_size_pct = min(size_hint_pct, self.risk_bounds.max_position_pct)
+        actual_size_pct = cap_size(self.risk_bounds, size_hint_pct)
         circle_tx_id = await self._execute_trade(asset, direction, actual_size_pct)
 
         position = Position(
@@ -151,7 +150,7 @@ class BuyerAgent:
             circle_tx_id=circle_tx_id,
         )
         self.open_positions[signal_id] = position
-        self.daily_var_used += actual_size_pct * 0.3  # rough VaR estimate
+        self.risk_state.daily_var_used += estimate_var_increment(actual_size_pct)
 
         # 4. Nanopayment on-chain
         try:
@@ -161,26 +160,6 @@ class BuyerAgent:
 
         # 5. Report to buyer dashboard (position opened — NOT the signal content)
         await self._report_position_opened(position)
-
-    def _validate_risk(self, asset: str, size_hint_pct: float) -> str | None:
-        """Returns rejection reason string, or None if signal is accepted."""
-        rb = self.risk_bounds
-        if rb.kill_switch:
-            return "kill_switch"
-        if asset.upper() not in rb.allowed_assets:
-            return f"asset_not_allowed:{asset}"
-        if size_hint_pct > rb.max_position_pct:
-            # We'll cap it, not reject — only reject if 0 would be allocated
-            pass
-        self._reset_daily_var_if_new_day()
-        if self.daily_var_used >= rb.daily_var_pct:
-            return "daily_var_limit_reached"
-        return None
-
-    def _reset_daily_var_if_new_day(self):
-        if time.time() - self.day_start >= 86400:
-            self.daily_var_used = 0.0
-            self.day_start = time.time()
 
     # ── Trade execution (Circle Wallets) ─────────────────────────────────────
 
@@ -285,7 +264,7 @@ async def main():
     bounds = RiskBounds(
         max_position_pct=float(os.environ.get("MAX_POSITION_PCT", "5.0")),
         max_leverage=float(os.environ.get("MAX_LEVERAGE", "1.0")),
-        allowed_assets=set(os.environ.get("ALLOWED_ASSETS", "ETH,BTC").split(",")),
+        allowed_assets=frozenset(os.environ.get("ALLOWED_ASSETS", "ETH,BTC").split(",")),
         daily_var_pct=float(os.environ.get("DAILY_VAR_PCT", "3.0")),
     )
     agent = BuyerAgent(risk_bounds=bounds)

@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useAccount } from "wagmi";
 import Link from "next/link";
 import { ConnectButton } from "../../components/ConnectButton";
+import { useProviderRegister } from "../../lib/onchain";
+import { isAddressesConfigured } from "../../lib/contracts";
 
 const FREQS = [
   { v:"HFT",             l:"hft",       s:"< 1h"      },
@@ -16,20 +18,41 @@ const FREQS = [
 export default function ProviderPage() {
   const { address, isConnected } = useAccount();
   const [form, setForm] = useState({ name:"", description:"", frequency:"Swing", agent_public_key:"" });
-  const [status, setStatus] = useState<"idle"|"submitting"|"done"|"error">("idle");
+  const [backendStatus, setBackendStatus] = useState<"idle"|"submitting"|"done"|"error">("idle");
+  const chainConfigured = isAddressesConfigured();
+  const { state: chainStatus, error: chainError, txHash, submit: submitOnchain } = useProviderRegister();
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setStatus("submitting");
+    if (!address) return;
+
+    if (chainConfigured) {
+      // 1. on-chain register (stakes 100 USDC)
+      await submitOnchain({
+        name: form.name,
+        description: form.description,
+        frequency: form.frequency,
+        agentPubKeyHex: form.agent_public_key,
+      });
+    }
+    // 2. mirror to backend so the marketplace can display the provider immediately
+    setBackendStatus("submitting");
     try {
       const url = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
       const res = await fetch(`${url}/providers/register`, {
         method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ ...form, address }),
       });
-      setStatus(res.ok ? "done" : "error");
-    } catch { setStatus("error"); }
+      setBackendStatus(res.ok ? "done" : "error");
+    } catch { setBackendStatus("error"); }
   };
+
+  const status: "idle"|"submitting"|"done"|"error" =
+    chainStatus === "approving" || chainStatus === "submitting" || backendStatus === "submitting"
+      ? "submitting"
+      : chainStatus === "error" || backendStatus === "error"
+      ? "error"
+      : (chainConfigured ? chainStatus === "done" : backendStatus === "done") ? "done" : "idle";
 
   return (
     <div className="min-h-screen bg-[#090c0a] text-[#d4ddd6]">
@@ -70,13 +93,20 @@ export default function ProviderPage() {
         {status === "done" ? (
           <div className="rounded-2xl border border-[#0f1a11] bg-[#0c110d] p-8">
             <p className="mb-3 font-mono text-sm text-[#52e07c]">registered ✓</p>
-            <p className="mb-6 text-sm text-[#4a5e4e] leading-relaxed">
-              Now stake 100 USDC on Arc to activate your listing.
-            </p>
+            {chainConfigured ? (
+              <p className="mb-6 text-sm text-[#4a5e4e] leading-relaxed">
+                100 USDC staked on Arc. Your listing is live in the marketplace.
+              </p>
+            ) : (
+              <p className="mb-6 text-sm text-[#4a5e4e] leading-relaxed">
+                Backend listing created. Set <code className="text-[#52e07c]">NEXT_PUBLIC_PROVIDER_REGISTRY_ADDRESS</code> to enable the on-chain stake step.
+              </p>
+            )}
+            {txHash && (
+              <div className="mb-4 break-all font-mono text-[10px] text-[#2d3d30]">tx: {txHash}</div>
+            )}
             <div className="flex flex-col gap-1.5 font-mono text-[11px] text-[#2d3d30]">
-              <div>1. approve 100 USDC on ProviderRegistry</div>
-              <div>2. call registry.register(...)</div>
-              <div>3. python -m agents.provider.agent</div>
+              <div>next: python -m agents.provider.agent</div>
             </div>
           </div>
         ) : !isConnected ? (
@@ -143,7 +173,14 @@ export default function ProviderPage() {
             </button>
 
             {status === "error" && (
-              <p className="font-mono text-xs text-red-400/70">registration failed.</p>
+              <p className="font-mono text-xs text-red-400/70 break-all">
+                registration failed{chainError ? `: ${chainError}` : ""}.
+              </p>
+            )}
+            {chainConfigured && (chainStatus === "approving" || chainStatus === "submitting") && (
+              <p className="font-mono text-[10px] text-[#2d3d30]">
+                {chainStatus === "approving" ? "step 1/2 · approving USDC..." : "step 2/2 · staking 100 USDC..."}
+              </p>
             )}
           </form>
         )}

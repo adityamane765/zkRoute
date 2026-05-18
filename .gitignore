@@ -1,39 +1,91 @@
-# Environment
+# ─────────────────────────────────────────────────────────────────
+# zkRoute — top-level gitignore
+# Per-subtree rules live in {contracts,circuits,backend,agents,frontend}/.gitignore
+# This file covers things that can appear anywhere in the repo.
+# ─────────────────────────────────────────────────────────────────
+
+# Secrets / config
 .env
-.env.local
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+.secrets/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.history/
 
 # Python
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
 dist/
+build/
 .venv/
 venv/
+env/
 
 # Node
 node_modules/
-frontend/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 .next/
-build/
+out/
 
-# Circuit artifacts (large, generated)
-circuits/build/*.ptau
-circuits/build/*.r1cs
-circuits/build/*.wasm
-circuits/build/*.zkey
-circuits/build/*.json
-!circuits/build/.gitkeep
+# Generated build outputs (per-subtree files refine this further)
+artifacts/
+cache/
 
-# Hardhat
+# Hardhat / Foundry
 contracts/artifacts/
 contracts/cache/
+contracts/typechain-types/
+contracts/coverage/
+contracts/coverage.json
 
-# DB
+# Circuit artifacts (large, generated, can be regenerated)
+circuits/build/
+!circuits/build/.gitkeep
+
+# Databases
 *.db
+*.db-journal
 *.sqlite
+*.sqlite3
 
-# Misc
-.DS_Store
+# Logs / runtime artifacts
 *.log
+logs/
 proof.json
 signals.json
+proof_*.json
+signals_*.json
+
+# Test outputs
+coverage/
+.nyc_output/
+
+# Misc
+*.tsbuildinfo
+.cache/
+.parcel-cache/
+.turbo/

@@ -1,0 +1,24 @@
+# All circom build artifacts — large + fully regenerable from setup.sh
+build/
+
+# Powers of Tau download (huge)
+*.ptau
+
+# Generated R1CS, wasm, zkey
+*.r1cs
+*.wasm
+*.zkey
+*.sym
+
+# Proofs are per-provider, ephemeral
+proof.json
+proof_*.json
+signals.json
+signals_*.json
+
+# Witness files
+*.wtns
+
+# Local env
+.env
+.env.local

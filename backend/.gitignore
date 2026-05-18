@@ -1,0 +1,27 @@
+# Local databases
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+zkroute.db
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtualenv
+.venv/
+venv/
+env/
+
+# Coverage
+.coverage
+htmlcov/
+coverage.xml
+
+# Local env
+.env
+.env.local

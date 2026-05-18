@@ -96,10 +96,11 @@ class SignalMarketContract:
             "active": sub[0],
             "float": sub[1],
             "buyerAgentPubKey": sub[2].hex(),
-            "maxPositionBps": sub[3],
-            "maxLeverageBps": sub[4],
-            "dailyVarBps": sub[5],
-            "signalCount": sub[6],
+            "agent": sub[3],
+            "maxPositionBps": sub[4],
+            "maxLeverageBps": sub[5],
+            "dailyVarBps": sub[6],
+            "signalCount": sub[7],
         }
 
     def process_signal_payment(self, account: Account, provider: str) -> str:

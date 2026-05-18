@@ -1,0 +1,31 @@
+# Node modules
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Production builds
+build/
+dist/
+
+# Build info
+*.tsbuildinfo
+next-env.d.ts.swp
+
+# Environment
+.env
+.env*.local
+.env.local
+.env.development.local
+.env.production.local
+
+# Vercel
+.vercel/
+
+# Test coverage
+coverage/
+
+# Misc
+*.log
+.DS_Store
