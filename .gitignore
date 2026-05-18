@@ -1,0 +1,39 @@
+# Environment
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+.venv/
+venv/
+
+# Node
+node_modules/
+frontend/node_modules/
+.next/
+build/
+
+# Circuit artifacts (large, generated)
+circuits/build/*.ptau
+circuits/build/*.r1cs
+circuits/build/*.wasm
+circuits/build/*.zkey
+circuits/build/*.json
+!circuits/build/.gitkeep
+
+# Hardhat
+contracts/artifacts/
+contracts/cache/
+
+# DB
+*.db
+*.sqlite
+
+# Misc
+.DS_Store
+*.log
+proof.json
+signals.json
