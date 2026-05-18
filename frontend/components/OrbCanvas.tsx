@@ -6,7 +6,7 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(ScrollTrigger);
 
-export function OrbCanvas({ scrollProgressRef }: { scrollProgressRef: React.MutableRefObject<number> }) {
+export function OrbCanvas({ scrollProgressRef, height = "100vh" }: { scrollProgressRef: React.MutableRefObject<number>; height?: string | number }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const grainCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -127,8 +127,9 @@ export function OrbCanvas({ scrollProgressRef }: { scrollProgressRef: React.Muta
     function render() {
       timeRef.current += 0.016;
       const time = timeRef.current;
-      const width = canvas.width = grainCanvas.width = window.innerWidth;
-      const height = canvas.height = grainCanvas.height = window.innerHeight;
+      const container = containerRef.current!;
+      const width = canvas.width = grainCanvas.width = container.offsetWidth;
+      const height = canvas.height = grainCanvas.height = container.offsetHeight;
 
       ctx.fillStyle = "#000";
       ctx.fillRect(0, 0, width, height);
@@ -205,7 +206,7 @@ export function OrbCanvas({ scrollProgressRef }: { scrollProgressRef: React.Muta
   }, [scrollProgressRef]);
 
   return (
-    <div ref={containerRef} style={{ position: "sticky", top: 0, width: "100%", height: "100vh" }}>
+    <div ref={containerRef} style={{ position: "relative", width: "100%", height }}>
       <canvas ref={canvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} />
       <canvas ref={grainCanvasRef} style={{
         position: "absolute", inset: 0, width: "100%", height: "100%",
