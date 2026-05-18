@@ -9,7 +9,7 @@ export default function Home() {
   const scrollProgressRef = useRef(0);
 
   return (
-    <div style={{ background: "#000", color: "#fff" }}>
+    <div style={{ color: "#fff" }}>
 
       {/* ── nav ── */}
       <nav style={{
@@ -41,22 +41,23 @@ export default function Home() {
         </Link>
       </nav>
 
-      {/* ── orb + name, tight together ── */}
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 60 }}>
+      {/* ── hero: canvas is the full background, wordmark overlays inside it ── */}
+      <div style={{ position: "relative", width: "100%", height: "100vh" }}>
 
-        {/* orb canvas — contained size */}
-        <div style={{ width: "100%", height: "65vh" }}>
-          <OrbCanvas scrollProgressRef={scrollProgressRef} height="65vh" />
-        </div>
+        {/* canvas fills entire hero */}
+        <OrbCanvas scrollProgressRef={scrollProgressRef} height="100vh" />
 
-        {/* wordmark — 10px gap */}
-        <div style={{ marginTop: 10, textAlign: "center" }}>
+        {/* wordmark pinned to bottom of hero, 10px above the ticker */}
+        <div style={{
+          position: "absolute", bottom: 0, left: 0, right: 0,
+          textAlign: "center", paddingBottom: 32,
+        }}>
           <div style={{
             fontFamily: "'Arial Black', Arial, sans-serif",
             fontSize: "clamp(3.5rem, 12vw, 10rem)",
             fontWeight: 900, color: "white",
             lineHeight: 1, letterSpacing: "-0.02em",
-            textShadow: "0 0 60px rgba(255,255,255,0.15)",
+            textShadow: "0 0 80px rgba(255,255,255,0.1)",
           }}>
             zkRoute
           </div>
@@ -64,10 +65,10 @@ export default function Home() {
 
       </div>
 
-      {/* ── below the fold ── */}
-      <div style={{ background: "#090c0a", marginTop: 60 }}>
+      {/* ── ticker line onwards ── */}
+      <div style={{ background: "#090c0a" }}>
 
-        <div style={{ borderTop: "1px solid #0f1a11" }}>
+        <div style={{ borderTop: "1px solid #1a2e1c" }}>
           <Ticker />
         </div>
 

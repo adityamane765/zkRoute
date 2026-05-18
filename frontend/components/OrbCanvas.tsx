@@ -131,14 +131,13 @@ export function OrbCanvas({ scrollProgressRef, height = "100vh" }: { scrollProgr
       const width = canvas.width = grainCanvas.width = container.offsetWidth;
       const height = canvas.height = grainCanvas.height = container.offsetHeight;
 
-      ctx.fillStyle = "#000";
-      ctx.fillRect(0, 0, width, height);
+      ctx.clearRect(0, 0, width, height);
 
       const cx = width / 2, cy = height / 2;
-      const radius = Math.min(width, height) * 0.2;
+      const radius = Math.min(width, height) * 0.08;
       const hue = 180 + params.atmosphereShift * 60;
 
-      const bg = ctx.createRadialGradient(cx, cy - 50, 0, cx, cy, Math.max(width, height) * 0.8);
+      const bg = ctx.createRadialGradient(cx, cy - 50, 0, cx, cy, Math.max(width, height) * 0.45);
       bg.addColorStop(0, `hsla(${hue + 40}, 80%, 60%, 0.4)`);
       bg.addColorStop(0.3, `hsla(${hue}, 60%, 40%, 0.3)`);
       bg.addColorStop(0.6, `hsla(${hue - 20}, 40%, 20%, 0.2)`);
