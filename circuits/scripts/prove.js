@@ -50,9 +50,9 @@ async function main() {
   const outcomes = signals.map(s => BigInt(s.outcome));
   const returns = signals.map(s => BigInt(s.returnBps));
 
-  // Compute commitment root (Poseidon chained)
+  // Compute Poseidon commitment root (circuit-internal, not compared on-chain)
   let root = 0n;
-  const commitmentHashes = [];
+  const commitmentHashes = []; // Poseidon hashes — used inside circuit
   for (let i = 0; i < N; i++) {
     const h = poseidon([signalIds[i], directions[i], salts[i]]);
     const hBig = F.toObject(h);
@@ -61,12 +61,29 @@ async function main() {
     root = F.toObject(chained);
   }
 
+  // Compute keccak hashes for the REAL signals only (non-padded).
+  // These are passed to SignalMarket.submitStatsProof for on-chain verification.
+  const { ethers } = require("ethers");
+  const realSignals = raw; // original array before padding
+  const onChainSignalIds = realSignals.map(s => s.signalId);
+  const onChainHashes = realSignals.map(s =>
+    ethers.solidityPackedKeccak256(
+      ["bytes32", "uint8", "bytes32", "bytes32"],
+      [s.signalId, s.direction, s.assetId, s.salt]
+    )
+  );
+
   // Compute public stats
-  const wins = outcomes.reduce((a, b) => a + b, 0n);
-  const returnSum = returns.reduce((a, b) => a + b, 0n);
-  const totalSignals = BigInt(N);
-  const winRateBps = (wins * 10000n) / totalSignals;
-  const totalReturnBps = returnSum - totalSignals * RETURN_OFFSET;
+  const realCount = BigInt(raw.length);
+  // Only count wins/returns from real (non-padded) signals
+  const wins = outcomes.slice(0, Number(realCount)).reduce((a, b) => a + b, 0n);
+  const realReturnSum = returns.slice(0, Number(realCount)).reduce((a, b) => a + b, 0n);
+  // Padded signals have return=5000 (neutral), so full returnSum[N] = realReturnSum + pad*5000
+  const returnSum = realReturnSum + (BigInt(N) - realCount) * RETURN_OFFSET;
+  const totalSignals = realCount;
+  const winRateBps = realCount > 0n ? (wins * 10000n) / totalSignals : 0n;
+  // totalReturnBps = returnSum[N] - N*5000 (matches circuit constraint)
+  const totalReturnBps = returnSum - BigInt(N) * RETURN_OFFSET;
 
   const input = {
     winRateBps: winRateBps.toString(),
@@ -99,6 +116,9 @@ async function main() {
     proof,
     publicSignals,
     calldata,
+    // Pass these arrays as extra args to SignalMarket.submitStatsProof
+    onChainSignalIds,
+    onChainHashes,
     stats: {
       winRateBps: winRateBps.toString(),
       totalReturnBps: totalReturnBps.toString(),

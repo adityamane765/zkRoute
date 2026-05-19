@@ -177,33 +177,83 @@ describe("SignalMarket — processSignalPayment", function () {
 });
 
 describe("SignalMarket — submitStatsProof (stub verifier)", function () {
-  it("rejects when commitment root mismatches", async () => {
+  function makeCommit({ signalId, direction, asset, salt }) {
+    const assetId = ethers.keccak256(ethers.toUtf8Bytes(asset));
+    const hash = ethers.solidityPackedKeccak256(
+      ["bytes32", "uint8", "bytes32", "bytes32"],
+      [signalId, direction, assetId, salt]
+    );
+    return { signalId, direction, assetId, salt, hash };
+  }
+
+  async function commitAndReveal(cr, signer, c) {
+    await cr.connect(signer).commit(c.signalId, c.hash);
+    await ethers.provider.send("evm_mine", []);
+    await cr.connect(signer).reveal(c.signalId, c.direction, c.assetId, c.salt, true);
+  }
+
+  it("accepts proof with valid revealed signal batch", async () => {
     const { market, providerWallet, cr } = await fixture();
+    const c = makeCommit({ signalId: "0x" + "aa".repeat(32), direction: 1, asset: "ETH", salt: "0x" + "bb".repeat(32) });
+    await commitAndReveal(cr, providerWallet, c);
+
     const pA = [0n, 0n], pB = [[0n, 0n], [0n, 0n]], pC = [0n, 0n];
-    const pubSignals = [6800n, 2340n, 100n, 1n]; // root = 1, doesn't match (cr is empty -> root = 0)
+    // totalSignals=1 matches signalIds.length=1; MockVerifier always returns true
+    const pub = [6800n, 230n, 1n, 0n];
     await expect(
-      market.connect(providerWallet).submitStatsProof(pA, pB, pC, pubSignals)
-    ).to.be.revertedWith("commitment root mismatch");
+      market.connect(providerWallet).submitStatsProof(pA, pB, pC, pub, [c.signalId], [c.hash])
+    ).to.emit(market, "StatsProofSubmitted");
+
+    const stats = await market.getProviderStats(providerWallet.address);
+    expect(stats.winRateBps).to.equal(6800n);
+  });
+
+  it("rejects when signal batch fails verification (unrevealed)", async () => {
+    const { market, providerWallet, cr } = await fixture();
+    const c = makeCommit({ signalId: "0x" + "aa".repeat(32), direction: 1, asset: "ETH", salt: "0x" + "bb".repeat(32) });
+    await cr.connect(providerWallet).commit(c.signalId, c.hash); // committed but NOT revealed
+
+    const pA = [0n, 0n], pB = [[0n, 0n], [0n, 0n]], pC = [0n, 0n];
+    const pub = [6800n, 230n, 1n, 0n];
+    await expect(
+      market.connect(providerWallet).submitStatsProof(pA, pB, pC, pub, [c.signalId], [c.hash])
+    ).to.be.revertedWith("signal batch mismatch");
+  });
+
+  it("rejects when signal count doesn't match pubSignals totalSignals", async () => {
+    const { market, providerWallet, cr } = await fixture();
+    const c = makeCommit({ signalId: "0x" + "aa".repeat(32), direction: 1, asset: "ETH", salt: "0x" + "bb".repeat(32) });
+    await commitAndReveal(cr, providerWallet, c);
+
+    const pA = [0n, 0n], pB = [[0n, 0n], [0n, 0n]], pC = [0n, 0n];
+    const pub = [6800n, 230n, 5n, 0n]; // claims 5 signals but only 1 provided
+    await expect(
+      market.connect(providerWallet).submitStatsProof(pA, pB, pC, pub, [c.signalId], [c.hash])
+    ).to.be.revertedWith("signal count mismatch");
   });
 
   it("rate-limits proof submissions", async () => {
     const { market, providerWallet, cr } = await fixture();
+    const c = makeCommit({ signalId: "0x" + "aa".repeat(32), direction: 1, asset: "ETH", salt: "0x" + "bb".repeat(32) });
+    await commitAndReveal(cr, providerWallet, c);
+
     const pA = [0n, 0n], pB = [[0n, 0n], [0n, 0n]], pC = [0n, 0n];
-    const root = await cr.getCommitmentRoot(providerWallet.address); // 0
-    const pub = [6800n, 2340n, 100n, BigInt(root)];
-    await market.connect(providerWallet).submitStatsProof(pA, pB, pC, pub);
+    const pub = [6800n, 230n, 1n, 0n];
+    await market.connect(providerWallet).submitStatsProof(pA, pB, pC, pub, [c.signalId], [c.hash]);
     await expect(
-      market.connect(providerWallet).submitStatsProof(pA, pB, pC, pub)
+      market.connect(providerWallet).submitStatsProof(pA, pB, pC, pub, [c.signalId], [c.hash])
     ).to.be.revertedWith("too soon");
   });
 
   it("rejects invalid winRate", async () => {
     const { market, providerWallet, cr } = await fixture();
+    const c = makeCommit({ signalId: "0x" + "aa".repeat(32), direction: 1, asset: "ETH", salt: "0x" + "bb".repeat(32) });
+    await commitAndReveal(cr, providerWallet, c);
+
     const pA = [0n, 0n], pB = [[0n, 0n], [0n, 0n]], pC = [0n, 0n];
-    const root = await cr.getCommitmentRoot(providerWallet.address);
-    const pub = [10_001n, 0n, 100n, BigInt(root)];
+    const pub = [10_001n, 0n, 1n, 0n];
     await expect(
-      market.connect(providerWallet).submitStatsProof(pA, pB, pC, pub)
+      market.connect(providerWallet).submitStatsProof(pA, pB, pC, pub, [c.signalId], [c.hash])
     ).to.be.revertedWith("invalid winRate");
   });
 });

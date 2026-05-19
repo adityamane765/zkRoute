@@ -31,8 +31,8 @@ contract CommitReveal {
     // provider => ordered list of signal IDs (for ZK proof generation)
     mapping(address => bytes32[]) public signalHistory;
 
-    // Cached rolling root for O(1) reads of commitmentRoot (avoids O(n) loop view).
-    mapping(address => bytes32) private commitmentRoot_;
+    // Count of revealed (settled) signals per provider — used by ZK proof verification.
+    mapping(address => uint256) public revealedCount;
 
     // Minimum blocks before reveal is allowed (anti-cherry-pick: can't reveal same block)
     uint256 public constant MIN_REVEAL_DELAY_BLOCKS = 1;
@@ -56,11 +56,6 @@ contract CommitReveal {
             outcome: false
         });
         signalHistory[msg.sender].push(signalId);
-
-        // Update rolling Merkle-style root incrementally so views are O(1).
-        commitmentRoot_[msg.sender] = keccak256(
-            abi.encodePacked(commitmentRoot_[msg.sender], hash)
-        );
 
         emit SignalCommitted(msg.sender, signalId, hash, block.number);
     }
@@ -93,6 +88,7 @@ contract CommitReveal {
         c.revealed = true;
         c.outcome = outcome;
         c.direction = direction;
+        revealedCount[msg.sender]++;
         emit SignalRevealed(msg.sender, signalId, outcome);
     }
 
@@ -111,10 +107,27 @@ contract CommitReveal {
     }
 
     /**
-     * @notice Returns the rolling keccak aggregation of all committed hashes
-     *         for this provider, used as a public input to the ZK circuit.
+     * @notice Verify that all supplied signal hashes exist and were revealed
+     *         by the given provider. Used by SignalMarket.submitStatsProof
+     *         instead of an on-chain root comparison.
+     * @param provider   The provider whose history to check.
+     * @param signalIds  The signal IDs the prover claims to have committed.
+     * @param hashes     keccak256(abi.encodePacked(signalId, direction, assetId, salt))
+     *                   for each signal — matches what was stored at commit time.
+     * @return True iff every (signalId, hash) pair exists and is revealed.
      */
-    function getCommitmentRoot(address provider) external view returns (bytes32) {
-        return commitmentRoot_[provider];
+    function verifySignalBatch(
+        address provider,
+        bytes32[] calldata signalIds,
+        bytes32[] calldata hashes
+    ) external view returns (bool) {
+        require(signalIds.length == hashes.length, "length mismatch");
+        for (uint256 i = 0; i < signalIds.length; i++) {
+            Commitment storage c = commitments[provider][signalIds[i]];
+            if (c.blockNumber == 0) return false;       // never committed
+            if (!c.revealed)        return false;       // not yet settled
+            if (c.hash != hashes[i]) return false;      // hash doesn't match
+        }
+        return true;
     }
 }

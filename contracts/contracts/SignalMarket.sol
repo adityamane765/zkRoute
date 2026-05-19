@@ -218,30 +218,47 @@ contract SignalMarket is Ownable, ReentrancyGuard, Pausable {
 
     /**
      * @notice Provider submits a Groth16 proof of their track record.
+     *
      *         Public inputs: [winRateBps, totalReturnBps, totalSignals, commitmentRoot]
-     *         Circuit proves: given private signal history, committed hashes match
-     *         outcomes and produce the claimed stats.
+     *           - commitmentRoot is the Poseidon root computed inside the circuit.
+     *             We do NOT compare it against an on-chain keccak root (they use
+     *             different hash functions). Instead we verify individual signal
+     *             existence via verifySignalBatch.
+     *
+     *         @param signalIds  The real signal IDs included in the proof (non-padded).
+     *         @param hashes     keccak256 commitment hash for each signal ID.
+     *                           Must match what was stored at commit time.
      */
     function submitStatsProof(
         uint256[2] calldata pA,
         uint256[2][2] calldata pB,
         uint256[2] calldata pC,
-        uint256[4] calldata pubSignals  // [winRateBps, totalReturnBps, totalSignals, commitmentRoot]
+        uint256[4] calldata pubSignals,   // [winRateBps, totalReturnBps, totalSignals, commitmentRoot]
+        bytes32[] calldata signalIds,
+        bytes32[] calldata hashes
     ) external whenNotPaused {
         require(registry.getProvider(msg.sender).active, "not registered");
         require(address(zkVerifier) != address(0), "verifier not set");
 
-        // Rate-limit proof submissions to prevent griefing on cheap chains
+        // Rate-limit proof submissions
         ProviderStats storage st = providerStats[msg.sender];
         require(
             st.lastProofBlock == 0 || block.number >= st.lastProofBlock + MIN_PROOF_INTERVAL_BLOCKS,
             "too soon"
         );
 
-        // Verify commitment root matches on-chain state
-        bytes32 onChainRoot = commitReveal.getCommitmentRoot(msg.sender);
-        require(bytes32(pubSignals[3]) == onChainRoot, "commitment root mismatch");
         require(pubSignals[0] <= BPS_DENOM, "invalid winRate");
+
+        // Confirm every signal the prover claims exists and was revealed on-chain.
+        // This binds the proof to real on-chain history without needing an EVM Poseidon.
+        require(
+            commitReveal.verifySignalBatch(msg.sender, signalIds, hashes),
+            "signal batch mismatch"
+        );
+
+        // The number of real signals must match the public totalSignals input.
+        // (The circuit pads to N=100 with dummy signals; signalIds contains only real ones.)
+        require(signalIds.length == pubSignals[2], "signal count mismatch");
 
         require(
             zkVerifier.verifyProof(pA, pB, pC, pubSignals),

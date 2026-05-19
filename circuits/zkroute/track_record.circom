@@ -85,14 +85,17 @@ template TrackRecord(N) {
     }
 
     // ── Step 3: Constrain public stats ─────────────────────────────────────
-    // totalSignals is public — must equal N
-    totalSignals === N;
+    // totalSignals is the number of real (non-padded) signals.
+    // winRateBps = wins / totalSignals * 10000
+    // Circuit avoids division: winRateBps * totalSignals === winSum[N] * 10000
+    winRateBps * totalSignals === winSum[N] * 10000;
 
-    // winRateBps = winSum[N] * 10000 / N
-    // To avoid division in circuit: winRateBps * N === winSum[N] * 10000
-    winRateBps * N === winSum[N] * 10000;
-
-    // totalReturnBps = returnSum[N] - N * 5000  (remove offset encoding)
+    // totalReturnBps = sum of real returns - real_count * 5000.
+    // Padded signals have return=5000 (offset zero), so they contribute 0 net.
+    // returnSum[N] = real_return_sum + pad_count * 5000
+    //             = (totalReturnBps + totalSignals*5000) + (N - totalSignals)*5000
+    //             = totalReturnBps + N*5000
+    // Therefore: totalReturnBps === returnSum[N] - N * 5000
     totalReturnBps === returnSum[N] - N * 5000;
 }
 
