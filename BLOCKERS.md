@@ -14,17 +14,16 @@ A focused list of what's blocking zkRoute from being either (a) a complete demo,
 | # | Blocker | Severity | Gates | Effort |
 |---|---------|----------|-------|--------|
 | 1 | Poseidon ↔ keccak commitment-root mismatch | 🔴 | Real ZK proof submission | ~1–4 hours |
-| 2 | Gemini API key in chat history | 🔴 | Secrets hygiene | 5 minutes |
-| 3 | Circle Wallets in `[SIM]` mode | 🟡 | Real trade execution | ~30 min once creds in hand |
-| 4 | Zero real providers / buyers | 🟡 | Traction (30% of judging) | Days, depends on outreach |
-| 5 | No recorded demo video | 🟡 | Hackathon submission | 1–2 hours |
-| 6 | Backend has no auth on relay writes | 🟡 | Production security | ~2 hours |
-| 7 | Frontend leaks `swrm_…` RPC token via `NEXT_PUBLIC_*` | 🟡 | Public frontend deploy | ~1 hour (proxy via backend) |
-| 8 | Single-contribution trusted setup | 🟢 | Mainnet readiness | Days (multi-party ceremony) |
-| 9 | SQLite + no rate limits | 🟢 | Scale | ~half day |
-| 10 | Owner is deployer EOA, not multisig | 🟢 | Pre-mainnet | ~1 hour (deploy Safe + `transferOwnership`) |
-| 11 | MockUSDC instead of canonical Arc USDC | 🟢 | Real settlement | When Canteen publishes USDC address |
-| 12 | Provider strategy is Gemini placeholder | 🟢 | Real alpha | Replace `generate_signal()` with quant model |
+| 2 | Circle Wallets in `[SIM]` mode | 🟡 | Real trade execution | ~30 min once creds in hand |
+| 3 | Zero real providers / buyers | 🟡 | Traction (30% of judging) | Days, depends on outreach |
+| 4 | No recorded demo video | 🟡 | Hackathon submission | 1–2 hours |
+| 5 | Backend has no auth on relay writes | 🟡 | Production security | ~2 hours |
+| 6 | Frontend leaks `swrm_…` RPC token via `NEXT_PUBLIC_*` | 🟡 | Public frontend deploy | ~1 hour (proxy via backend) |
+| 7 | Single-contribution trusted setup | 🟢 | Mainnet readiness | Days (multi-party ceremony) |
+| 8 | SQLite + no rate limits | 🟢 | Scale | ~half day |
+| 9 | Owner is deployer EOA, not multisig | 🟢 | Pre-mainnet | ~1 hour (deploy Safe + `transferOwnership`) |
+| 10 | MockUSDC instead of canonical Arc USDC | 🟢 | Real settlement | When Canteen publishes USDC address |
+| 11 | Provider strategy is Gemini placeholder | 🟢 | Real alpha | Replace `generate_signal()` with quant model |
 
 ---
 
@@ -81,8 +80,9 @@ they match the count and hashes the circuit committed to.
 
 ### 2. Gemini API key appeared in chat history
 
-**What it blocks.** Nothing functional — but the key
-`AIzaSy…rf7Y` was pasted in chat and now lives in your conversation logs.
+**What it blocks.** Nothing functional — but the key was pasted in chat
+during this session and now lives in conversation history. Treat it as
+compromised.
 
 **Fix.**
 
