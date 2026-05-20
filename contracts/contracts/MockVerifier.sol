@@ -10,13 +10,24 @@ pragma solidity ^0.8.24;
  *         to a real network — the deploy script only uses Groth16Verifier.
  */
 contract MockVerifier {
+    // Local Hardhat default; Anvil also uses this. Anything else is an error.
+    uint256 private constant HARDHAT_CHAIN_ID = 31337;
+
+    constructor() {
+        // Refuse to deploy outside a local dev chain. Prevents an accidental
+        // `npx hardhat run scripts/deploy.js --network arc` from putting a
+        // permissive verifier on a public network.
+        require(block.chainid == HARDHAT_CHAIN_ID, "MockVerifier: local-only");
+    }
+
     function verifyProof(
         uint256[2] calldata /* pA */,
         uint256[2][2] calldata /* pB */,
         uint256[2] calldata /* pC */,
         uint256[4] calldata pubSignals
     ) external pure returns (bool) {
-        // Match the original stub's smell-check: winRate must be ≤ 100%.
+        // Smell check only: first public input bounded. The real verifier
+        // would do a pairing check.
         return pubSignals[0] <= 10_000;
     }
 }
