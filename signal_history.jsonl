@@ -1,2 +1,4 @@
 {"signalId": "0x7076534fec6a6e07ff192367351f62bef464bd0ba8a87842073e2928cfa538fb", "asset": "ETH", "direction": 1, "salt": "0x2763fb9d8a28aa891ad8dbb5fb5f2a7f2008fecde56caf3d433d5d48e8d7d391", "outcome": 0, "returnBps": 4998}
 {"signalId": "0x2984fa87db5e956ba1bc6827df87fb0b626bb9cb29ed60f4024e665955723477", "asset": "ETH", "direction": 1, "salt": "0xb7c964e957dee435e3ce6d940cd16906cb02dd0174a4556abbb54881e6141222", "outcome": 0, "returnBps": 4998}
+{"signalId": "0x2805ccaa782fef0bda1d3f3759042d4d9f45da33906c11806c5c522f32b099c9", "asset": "ETH", "direction": 1, "salt": "0x2046719b0ccd45d01b88f914a85c6668e2aaccfda5f11db054d69cd84b60e493", "outcome": 0, "returnBps": 4999}
+{"signalId": "0xb2a616a9caf09cd08f0206e3738f815ffdff184851a849b846c3b93078b37af7", "asset": "BTC", "direction": 0, "salt": "0x1f46e56cc5b625249c7e22e4166c3ed417bac1691a3e9e756ae0a4ac5ba6b74a", "outcome": 1, "returnBps": 5001}
