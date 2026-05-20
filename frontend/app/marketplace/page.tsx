@@ -10,6 +10,7 @@ interface Provider {
   name: string;
   description: string;
   frequency: string;
+  win_count: number | null;
   win_rate_bps: number | null;
   total_return_bps: number | null;
   total_signals: number | null;
@@ -17,10 +18,10 @@ interface Provider {
 }
 
 const DEMO: Provider[] = [
-  { address:"0x1111111111111111111111111111111111111111", name:"ETH Momentum Alpha",   description:"Medium-frequency ETH strategy targeting momentum regime shifts.",              frequency:"MediumFrequency", win_rate_bps:6800, total_return_bps:2340, total_signals:47,  last_proof_block:100000 },
-  { address:"0x2222222222222222222222222222222222222222", name:"BTC Swing Desk",        description:"Multi-day BTC swing trades based on on-chain analytics and macro data.",     frequency:"Swing",           win_rate_bps:5900, total_return_bps:1820, total_signals:23,  last_proof_block:99800  },
-  { address:"0x3333333333333333333333333333333333333333", name:"Multi-Asset Intraday",  description:"High-cadence signals across ETH and BTC. Sub-4h holding periods.",          frequency:"Intraday",        win_rate_bps:6200, total_return_bps:890,  total_signals:134, last_proof_block:100100 },
-  { address:"0x4444444444444444444444444444444444444444", name:"Macro Quant",           description:"Macro-driven directional bets. Fed policy, stablecoin flows, positioning.", frequency:"Macro",           win_rate_bps:null, total_return_bps:null, total_signals:null,last_proof_block:null   },
+  { address:"0x1111111111111111111111111111111111111111", name:"ETH Momentum Alpha",   description:"Medium-frequency ETH strategy targeting momentum regime shifts.",              frequency:"MediumFrequency", win_count:32,  win_rate_bps:6800, total_return_bps:2340, total_signals:47,  last_proof_block:100000 },
+  { address:"0x2222222222222222222222222222222222222222", name:"BTC Swing Desk",        description:"Multi-day BTC swing trades based on on-chain analytics and macro data.",     frequency:"Swing",           win_count:14,  win_rate_bps:5900, total_return_bps:1820, total_signals:23,  last_proof_block:99800  },
+  { address:"0x3333333333333333333333333333333333333333", name:"Multi-Asset Intraday",  description:"High-cadence signals across ETH and BTC. Sub-4h holding periods.",          frequency:"Intraday",        win_count:83,  win_rate_bps:6200, total_return_bps:890,  total_signals:134, last_proof_block:100100 },
+  { address:"0x4444444444444444444444444444444444444444", name:"Macro Quant",           description:"Macro-driven directional bets. Fed policy, stablecoin flows, positioning.", frequency:"Macro",           win_count:null,win_rate_bps:null, total_return_bps:null, total_signals:null,last_proof_block:null   },
 ];
 
 const FREQ_LABEL: Record<string,string> = {
@@ -77,7 +78,10 @@ export default function Marketplace() {
         <div className="flex flex-col gap-3">
           {list.map(p => {
             const hasProof = p.last_proof_block != null;
-            const wr  = p.win_rate_bps    != null ? (p.win_rate_bps / 100).toFixed(1)    : null;
+            // Prefer win_count (new circuit) over legacy win_rate_bps.
+            const wr = p.win_count != null && p.total_signals
+              ? ((p.win_count / p.total_signals) * 100).toFixed(1)
+              : p.win_rate_bps != null ? (p.win_rate_bps / 100).toFixed(1) : null;
             const ret = p.total_return_bps != null ? (p.total_return_bps / 100).toFixed(1) : null;
             const up  = (p.total_return_bps ?? 0) >= 0;
 

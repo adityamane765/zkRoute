@@ -21,6 +21,7 @@ import httpx
 from dotenv import load_dotenv
 
 from ..shared import crypto, oracle, circle_wallets
+from ..shared.trade import TradeRequest, execute_trade
 from ..shared.chain import get_web3, get_account, SignalMarketContract
 from ..shared.config import BACKEND_URL, SIGNAL_MARKET_ADDRESS
 from ..shared.risk import (
@@ -107,12 +108,32 @@ class BuyerAgent:
                 return
             signals = resp.json()
 
+        # Track which signals processed successfully so we can /ack them.
+        # Re-deliveries (due to the LEASE_SECONDS retry window in the relay)
+        # are deduped by processed_signal_ids — safe to /ack either way.
+        to_ack: list[str] = []
         for item in signals:
             signal_id = item["signal_id"]
             if signal_id in self.processed_signal_ids:
+                to_ack.append(signal_id)
                 continue
             self.processed_signal_ids.add(signal_id)
-            await self._handle_signal(item)
+            try:
+                await self._handle_signal(item)
+                to_ack.append(signal_id)
+            except Exception as e:
+                # Don't ack on failure — relay will redeliver after the lease.
+                log.error(f"handle_signal failed for {signal_id[:10]}: {e}")
+
+        if to_ack:
+            try:
+                async with httpx.AsyncClient(timeout=5) as client:
+                    await client.post(f"{BACKEND_URL}/signals/ack", json={
+                        "buyer": BUYER_ADDRESS,
+                        "signal_ids": to_ack,
+                    })
+            except Exception as e:
+                log.warning(f"ack failed (will redeliver after lease): {e}")
 
     async def _handle_signal(self, item: dict):
         provider = item["provider"]
@@ -178,16 +199,7 @@ class BuyerAgent:
     async def _execute_trade(
         self, asset: str, direction: int, size_pct: float, signal_id: str
     ) -> str:
-        """
-        Executes a trade via Circle Programmable Wallets.
-
-        Strategy: for LONG we transfer USDC out (buy position),
-        for SHORT we transfer the asset back to USDC (sell).
-        On Arc testnet this settles as a USDC transfer to the asset's
-        contract address — replace with a DEX swap call for mainnet.
-
-        Returns Circle transaction ID, or "" on failure.
-        """
+        """Delegates to the trade dispatcher in shared/trade.py."""
         usdc_balance = await circle_wallets.get_usdc_balance(CIRCLE_WALLET_ID)
         trade_amount_usdc = usdc_balance * (size_pct / 100.0)
 
@@ -200,44 +212,19 @@ class BuyerAgent:
             log.warning(f"No Arc address configured for {asset} — check ARC_{asset}_ADDRESS in .env")
             return ""
 
-        idempotency_key = f"zkroute_{signal_id}_{asset}_{direction}"
+        if direction == 0:  # SHORT — use dedicated vault if configured
+            token_address = os.environ.get("ARC_SHORT_VAULT_ADDRESS", token_address)
 
-        try:
-            if direction == 1:  # LONG — send USDC to buy asset
-                destination = token_address
-                tx_id = await circle_wallets.transfer_usdc(
-                    CIRCLE_WALLET_ID,
-                    destination,
-                    trade_amount_usdc,
-                    idempotency_key=idempotency_key,
-                )
-            else:  # SHORT — send USDC representing a short position
-                # On Arc testnet: represent short as USDC transfer to a short vault
-                short_vault = os.environ.get("ARC_SHORT_VAULT_ADDRESS", token_address)
-                tx_id = await circle_wallets.transfer_usdc(
-                    CIRCLE_WALLET_ID,
-                    short_vault,
-                    trade_amount_usdc,
-                    idempotency_key=idempotency_key,
-                )
-
-            log.info(
-                f"Trade submitted: {asset} {'LONG' if direction else 'SHORT'} "
-                f"${trade_amount_usdc:.2f} USDC | Circle tx={tx_id}"
-            )
-
-            # Wait for confirmation
-            state = await circle_wallets.wait_for_transaction(tx_id, timeout_seconds=60)
-            if state != "COMPLETE":
-                log.error(f"Trade did not complete: {state} | tx={tx_id}")
-                return ""
-
-            log.info(f"Trade confirmed: {state} | tx={tx_id}")
-            return tx_id
-
-        except Exception as e:
-            log.error(f"Circle trade error: {e}")
-            return ""
+        req = TradeRequest(
+            asset=asset,
+            direction=direction,
+            size_usdc=trade_amount_usdc,
+            signal_id=signal_id,
+            token_address=token_address,
+            wallet_id=CIRCLE_WALLET_ID,
+            idempotency_key=f"zkroute_{signal_id}_{asset}_{direction}",
+        )
+        return await execute_trade(req)
 
     # ── Position monitoring ───────────────────────────────────────────────────
 

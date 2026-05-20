@@ -33,6 +33,9 @@ include "../node_modules/circomlib/circuits/bitify.circom";
  * Win rate is computed off-chain: winCount * 10000 / totalSignals
  *
  * MVP: N = 100 (fixed-size, pad with dummy signals that have outcome=0, return=5000)
+ *
+ * Variable-N hardening (BLOCKERS.md #14) — implementation drafted at
+ * docs/CIRCUIT_VARIABLE_N.md. Ships behind a new trusted-setup ceremony.
  */
 template TrackRecord(N) {
     // Public

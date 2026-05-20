@@ -12,7 +12,8 @@ class Provider(SQLModel, table=True):
     registered_at: datetime = Field(default_factory=datetime.utcnow)
     active: bool = True
     # ZK-verified stats (updated when provider submits proof)
-    win_rate_bps: Optional[int] = None
+    win_count: Optional[int] = None        # new winCount circuit output (slot 0 post-#3)
+    win_rate_bps: Optional[int] = None     # derived display value (win_count*10000/total_signals)
     total_return_bps: Optional[int] = None
     total_signals: Optional[int] = None
     last_proof_block: Optional[int] = None
@@ -38,7 +39,17 @@ class EncryptedSignal(SQLModel, table=True):
     provider_pubkey: str        # so buyer agent can decrypt
     encrypted_payload: str      # NaCl box ciphertext (hex)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    # `delivered` is now derived from `acked_at`; kept for backwards-compat with
+    # existing rows. New code paths should treat acked_at as the source of truth.
     delivered: bool = False
+    # At-least-once delivery semantics (BLOCKERS.md #15):
+    # - last_polled_at: when GET /pending last returned this row. Used to gate
+    #   re-delivery via the LEASE_SECONDS window so a crashed buyer eventually
+    #   gets the signal again.
+    # - acked_at: when the buyer POSTed /signals/ack confirming it processed
+    #   the row. Once set, the row is no longer returned by /pending.
+    last_polled_at: Optional[datetime] = Field(default=None, index=True)
+    acked_at: Optional[datetime] = Field(default=None, index=True)
 
 
 class SignalOutcome(SQLModel, table=True):

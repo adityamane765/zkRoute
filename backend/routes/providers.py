@@ -39,11 +39,14 @@ class ProviderRegisterRequest(BaseModel):
 
 
 class StatsUpdate(BaseModel):
-    win_rate_bps: int = Field(ge=0, le=10_000)
+    # New format (post-#3): supply win_count; win_rate_bps is derived.
+    win_count: Optional[int] = Field(default=None, ge=0)
+    # Legacy format (pre-#3): supply win_rate_bps directly.
+    win_rate_bps: Optional[int] = Field(default=None, ge=0, le=10_000)
     total_return_bps: int
     total_signals: int = Field(ge=0)
     last_proof_block: int = Field(ge=0)
-    # EIP-191 signature of `zkRoute stats: {win_rate_bps}|{total_return_bps}|{total_signals}|{last_proof_block}`
+    # EIP-191 signature of the canonical message (see update_stats below).
     signature: str
 
 
@@ -114,10 +117,29 @@ def update_stats(address: str, stats: StatsUpdate, session: Session = Depends(ge
     if not provider:
         raise HTTPException(404, "Provider not found")
 
-    message = (
-        f"zkRoute stats: {stats.win_rate_bps}|{stats.total_return_bps}|"
-        f"{stats.total_signals}|{stats.last_proof_block}"
-    )
+    # Resolve which format the caller is using.
+    if stats.win_count is None and stats.win_rate_bps is None:
+        raise HTTPException(400, "supply win_count (new) or win_rate_bps (legacy)")
+
+    if stats.win_count is not None:
+        win_count = stats.win_count
+        win_rate_bps = (
+            (win_count * 10_000) // stats.total_signals
+            if stats.total_signals > 0 else 0
+        )
+        # Canonical message uses win_count for new-format proofs.
+        message = (
+            f"zkRoute stats: {win_count}|{stats.total_return_bps}|"
+            f"{stats.total_signals}|{stats.last_proof_block}"
+        )
+    else:
+        win_count = None
+        win_rate_bps = stats.win_rate_bps
+        message = (
+            f"zkRoute stats: {win_rate_bps}|{stats.total_return_bps}|"
+            f"{stats.total_signals}|{stats.last_proof_block}"
+        )
+
     try:
         recovered = Account.recover_message(encode_defunct(text=message), signature=stats.signature)
     except Exception:
@@ -129,7 +151,8 @@ def update_stats(address: str, stats: StatsUpdate, session: Session = Depends(ge
     if provider.last_proof_block is not None and stats.last_proof_block < provider.last_proof_block:
         raise HTTPException(400, "stale proof block")
 
-    provider.win_rate_bps = stats.win_rate_bps
+    provider.win_count = win_count
+    provider.win_rate_bps = win_rate_bps
     provider.total_return_bps = stats.total_return_bps
     provider.total_signals = stats.total_signals
     provider.last_proof_block = stats.last_proof_block

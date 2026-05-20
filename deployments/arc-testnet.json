@@ -19,17 +19,19 @@
       "deployedAt": "2026-05-19T00:50:00Z"
     },
     "CommitReveal": {
-      "address": "0x6e6c34e5781D45C5b0c91ecf258EAfaccc52fCDe",
-      "deployedAt": "2026-05-19T00:50:00Z"
+      "address": "0x257beDCe2D5D1e806E936B87699BC637f0b08b60",
+      "deployedAt": "2026-05-19T00:50:00Z",
+      "_status": "Has 100 revealed signals from earlier work; reused by the winCount SignalMarket."
     },
     "Verifier": {
-      "address": "0x403Fe0408976b518b2952BdF590135Ec6ba12ebc",
-      "deployedAt": "2026-05-18T21:03:03.794220Z",
-      "_status": "Real Groth16Verifier from circuits/build/track_record_final.zkey \u2014 swapped in via SignalMarket.setVerifier on 2026-05-19."
+      "address": "0x1751D8d086a672F24Ccf8A16c19b3CA5068b1229",
+      "deployedAt": "2026-05-20T15:10:10.474991Z",
+      "_status": "Real Groth16Verifier for the winCount circuit (build/track_record_final.zkey v2). Wired into SignalMarket constructor."
     },
     "SignalMarket": {
-      "address": "0x02c40758eB9932257F056fbB60714ccbdA8C4bd4",
-      "deployedAt": "2026-05-19T00:50:00Z"
+      "address": "0x43EA5a1BC7926B57f4007920a04592281CAea2C1",
+      "deployedAt": "2026-05-20T16:14:00.000000Z",
+      "_status": "winCount circuit, CommitReveal 0x257beDCe… (100 reveals), Groth16Verifier 0x1751D8d0… wired via constructor. Closes blockers #3 + #4."
     }
   },
   "owner": {

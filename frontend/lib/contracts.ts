@@ -145,6 +145,18 @@ export const SIGNAL_MARKET_ABI = [
     inputs: [{ type: "address" }],
     outputs: [{ type: "uint256" }],
   },
+  {
+    type: "function",
+    name: "providerStats",
+    stateMutability: "view",
+    inputs: [{ type: "address" }],
+    outputs: [
+      { name: "winCount",       type: "uint256" },
+      { name: "totalReturnBps", type: "uint256" },
+      { name: "totalSignals",   type: "uint256" },
+      { name: "lastProofBlock", type: "uint256" },
+    ],
+  },
 ] as const;
 
 export const ERC20_ABI = [

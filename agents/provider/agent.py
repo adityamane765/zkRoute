@@ -71,7 +71,27 @@ class ProviderAgent:
         self.gemini = genai.Client()
         self.gemini_model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
         self.pending: dict[str, PendingSignal] = {}
-        self.signal_history: list[dict] = []   # for ZK proof generation
+        self.signal_history: list[dict] = self._load_signal_history()
+
+    def _load_signal_history(self) -> list[dict]:
+        """Reloads signal_history from the append-only .jsonl file written by
+        _reveal_signal so in-memory state survives agent restarts."""
+        import json as _json
+        history_path = os.environ.get("SIGNAL_HISTORY_PATH", "signal_history.jsonl")
+        entries: list[dict] = []
+        try:
+            with open(history_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        entries.append(_json.loads(line))
+            if entries:
+                log.info(f"Loaded {len(entries)} signal(s) from {history_path}")
+        except FileNotFoundError:
+            pass  # fresh start — file will be created on first reveal
+        except Exception as e:
+            log.warning(f"Could not load signal history from {history_path}: {e}")
+        return entries
 
     # ── Strategy: Gemini generates directional signal ───────────────────────
 
@@ -247,14 +267,25 @@ class ProviderAgent:
             f"outcome={'WIN' if outcome else 'LOSS'} return={return_bps}bps tx={tx[:10]}..."
         )
 
-        self.signal_history.append({
+        entry = {
             "signalId": sig.signal_id,
             "asset": sig.asset,
             "direction": sig.direction,
             "salt": sig.salt,
             "outcome": 1 if outcome else 0,
             "returnBps": 5000 + return_bps,  # offset encoding for ZK circuit
-        })
+        }
+        self.signal_history.append(entry)
+        # Crash-safe persistence: append a JSON line per reveal. The prover
+        # consumes this file. Without it, an agent restart between reveal and
+        # save_signal_history() would lose proof-input forever.
+        history_path = os.environ.get("SIGNAL_HISTORY_PATH", "signal_history.jsonl")
+        try:
+            import json as _json
+            with open(history_path, "a") as f:
+                f.write(_json.dumps(entry) + "\n")
+        except Exception as e:
+            log.warning(f"Failed to persist signal history to {history_path}: {e}")
 
         # Notify backend of outcome (for buyer dashboard)
         async with httpx.AsyncClient(timeout=10) as client:

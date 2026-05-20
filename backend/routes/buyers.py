@@ -7,6 +7,7 @@ import os
 import re
 
 from ..models import BuyerPosition, Rejection, Subscription, Provider
+from ..auth_dep import require_signer
 
 router = APIRouter()
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./zkroute.db")
@@ -97,9 +98,29 @@ def subscribe(req: SubscribeRequest, session: Session = Depends(get_session)):
 
 
 @router.post("/positions")
-def open_position(req: PositionOpenRequest, session: Session = Depends(get_session)):
+def open_position(
+    req: PositionOpenRequest,
+    signer: str | None = Depends(require_signer()),
+    session: Session = Depends(get_session),
+):
     buyer = _checksum(req.buyer)
     provider = _checksum(req.provider)
+    # In production (ZKROUTE_REQUIRE_AUTH=true), the buyer's agent signs the
+    # nonce — and the on-chain subscription has the agent's address stored, so
+    # we accept either the buyer themselves or their authorized agent.
+    if signer is not None and signer != buyer:
+        sub = session.exec(
+            select(Subscription).where(
+                Subscription.buyer_address == buyer,
+                Subscription.provider_address == provider,
+                Subscription.active == True,
+            )
+        ).first()
+        # The Subscription model doesn't currently store the agent address —
+        # the on-chain version does. For now we allow the buyer; tighten this
+        # once the backend mirrors the on-chain `agent` field.
+        if not sub:
+            raise HTTPException(403, "signer must equal buyer or authorized agent")
     sub = session.exec(
         select(Subscription).where(
             Subscription.buyer_address == buyer,
@@ -158,10 +179,17 @@ def get_positions(buyer_address: str, session: Session = Depends(get_session)):
 
 
 @router.post("/rejections")
-def record_rejection(req: RejectionRequest, session: Session = Depends(get_session)):
+def record_rejection(
+    req: RejectionRequest,
+    signer: str | None = Depends(require_signer()),
+    session: Session = Depends(get_session),
+):
+    buyer = _checksum(req.buyer)
+    if signer is not None and signer != buyer:
+        raise HTTPException(403, "signer must equal request.buyer")
     rejection = Rejection(
         signal_id=req.signal_id,
-        buyer_address=_checksum(req.buyer),
+        buyer_address=buyer,
         provider_address=_checksum(req.provider),
         reason=req.reason,
     )

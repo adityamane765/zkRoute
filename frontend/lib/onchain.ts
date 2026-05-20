@@ -1,11 +1,73 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAccount, useConfig } from "wagmi";
 import { readContract, writeContract, waitForTransactionReceipt } from "wagmi/actions";
 import { parseUnits } from "viem";
 
 import { ADDRESSES, ERC20_ABI, PROVIDER_REGISTRY_ABI, SIGNAL_MARKET_ABI, FREQUENCY_TO_ENUM } from "./contracts";
+
+/**
+ * On-chain provider stats from SignalMarket.providerStats(addr). After the
+ * winCount migration the struct is (winCount, totalReturnBps, totalSignals,
+ * lastProofBlock) — the display "winRateBps" is computed off-chain.
+ */
+export interface ProviderStats {
+  winCount: bigint;
+  totalReturnBps: bigint;
+  totalSignals: bigint;
+  lastProofBlock: bigint;
+  // Derived: winCount * 10000 / totalSignals, rounded to bps. 0 if no signals.
+  winRateBps: bigint;
+  // Convenience for UI: a Number in [0, 100], to one decimal place if you want.
+  winRatePct: number;
+  // True once submitStatsProof has been called at least once on-chain.
+  hasProof: boolean;
+}
+
+export function useProviderStats(provider?: `0x${string}` | null) {
+  const config = useConfig();
+  const [stats, setStats] = useState<ProviderStats | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!provider) { setStats(null); return; }
+    let cancelled = false;
+    setLoading(true); setError(null);
+    (async () => {
+      try {
+        const result = (await readContract(config, {
+          address: ADDRESSES.SIGNAL_MARKET,
+          abi: SIGNAL_MARKET_ABI,
+          functionName: "providerStats",
+          args: [provider],
+        })) as readonly [bigint, bigint, bigint, bigint];
+        const [winCount, totalReturnBps, totalSignals, lastProofBlock] = result;
+        const winRateBps = totalSignals > 0n
+          ? (winCount * 10000n) / totalSignals
+          : 0n;
+        const winRatePct = totalSignals > 0n
+          ? Number((winCount * 10000n) / totalSignals) / 100
+          : 0;
+        if (!cancelled) {
+          setStats({
+            winCount, totalReturnBps, totalSignals, lastProofBlock,
+            winRateBps, winRatePct,
+            hasProof: lastProofBlock > 0n,
+          });
+        }
+      } catch (e: any) {
+        if (!cancelled) setError(e?.shortMessage ?? e?.message ?? String(e));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [provider, config]);
+
+  return { stats, loading, error };
+}
 
 export type OnchainState = "idle" | "approving" | "submitting" | "done" | "error";
 

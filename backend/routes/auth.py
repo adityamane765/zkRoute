@@ -5,6 +5,8 @@ from pydantic import BaseModel
 from eth_account import Account
 from eth_account.messages import encode_defunct
 
+from ..auth_dep import issue_nonce, NONCE_MESSAGE as RELAY_NONCE_MESSAGE
+
 router = APIRouter()
 NONCE_MESSAGE = "zkRoute authentication nonce: {nonce}"
 
@@ -24,3 +26,14 @@ def verify_signature(req: VerifyRequest):
     if recovered.lower() != req.address.lower():
         raise HTTPException(401, "Signature verification failed")
     return {"authenticated": True, "address": recovered}
+
+
+@router.post("/nonce")
+def get_relay_nonce():
+    """Mint a short-lived nonce for relay/positions/rejections writes.
+
+    Caller signs `zkRoute relay nonce: <nonce>` with their wallet and posts
+    the signature as `Authorization: Bearer <sig>` with the nonce in the
+    `X-Zkroute-Nonce` header. See backend/auth_dep.py for details.
+    """
+    return {"nonce": issue_nonce(), "message_template": RELAY_NONCE_MESSAGE}
