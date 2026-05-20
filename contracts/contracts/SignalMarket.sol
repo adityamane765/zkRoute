@@ -68,7 +68,7 @@ contract SignalMarket is Ownable, ReentrancyGuard, Pausable {
 
     // provider => verified stats (updated by ZK proof submission)
     struct ProviderStats {
-        uint256 winRateBps;     // e.g. 6800 = 68%
+        uint256 winCount;       // number of winning signals (win rate = winCount * 10000 / totalSignals)
         uint256 totalReturnBps; // cumulative return bps
         uint256 totalSignals;
         uint256 lastProofBlock;
@@ -81,7 +81,7 @@ contract SignalMarket is Ownable, ReentrancyGuard, Pausable {
     event AgentUpdated(address indexed provider, address indexed buyer, address indexed agent);
     event RiskBoundsUpdated(address indexed provider, address indexed buyer);
     event SignalPaymentProcessed(address indexed provider, address indexed buyer, address indexed agent, uint256 providerAmount, uint256 fee);
-    event StatsProofSubmitted(address indexed provider, uint256 winRateBps, uint256 totalReturnBps);
+    event StatsProofSubmitted(address indexed provider, uint256 winCount, uint256 totalReturnBps);
     event RevenueClaimed(address indexed provider, uint256 amount);
     event TreasuryWithdrawn(address indexed to, uint256 amount);
     event SignalPriceUpdated(uint256 newPriceUsdc);
@@ -219,7 +219,8 @@ contract SignalMarket is Ownable, ReentrancyGuard, Pausable {
     /**
      * @notice Provider submits a Groth16 proof of their track record.
      *
-     *         Public inputs: [winRateBps, totalReturnBps, totalSignals, commitmentRoot]
+     *         Public inputs: [winCount, totalReturnBps, totalSignals, commitmentRoot]
+     *           - winCount is the integer win count; win rate bps = winCount * 10000 / totalSignals
      *           - commitmentRoot is the Poseidon root computed inside the circuit.
      *             We do NOT compare it against an on-chain keccak root (they use
      *             different hash functions). Instead we verify individual signal
@@ -233,7 +234,7 @@ contract SignalMarket is Ownable, ReentrancyGuard, Pausable {
         uint256[2] calldata pA,
         uint256[2][2] calldata pB,
         uint256[2] calldata pC,
-        uint256[4] calldata pubSignals,   // [winRateBps, totalReturnBps, totalSignals, commitmentRoot]
+        uint256[4] calldata pubSignals,   // [winCount, totalReturnBps, totalSignals, commitmentRoot]
         bytes32[] calldata signalIds,
         bytes32[] calldata hashes
     ) external whenNotPaused {
@@ -247,7 +248,8 @@ contract SignalMarket is Ownable, ReentrancyGuard, Pausable {
             "too soon"
         );
 
-        require(pubSignals[0] <= BPS_DENOM, "invalid winRate");
+        // winCount must not exceed totalSignals
+        require(pubSignals[0] <= pubSignals[2], "winCount > totalSignals");
 
         // Confirm every signal the prover claims exists and was revealed on-chain.
         // This binds the proof to real on-chain history without needing an EVM Poseidon.
@@ -265,7 +267,7 @@ contract SignalMarket is Ownable, ReentrancyGuard, Pausable {
             "invalid ZK proof"
         );
 
-        st.winRateBps = pubSignals[0];
+        st.winCount = pubSignals[0];
         st.totalReturnBps = pubSignals[1];
         st.totalSignals = pubSignals[2];
         st.lastProofBlock = block.number;

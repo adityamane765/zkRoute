@@ -1,19 +1,19 @@
 pragma circom 2.1.6;
 
 // Include paths are resolved relative to this .circom file. circomlib lives in
-// circuits/node_modules/ after `npm install`, so from circuits/zkroute/ that's
+// circuits/node_modules/ after `bun install`, so from circuits/zkroute/ that's
 // one level up.
 include "../node_modules/circomlib/circuits/poseidon.circom";
 include "../node_modules/circomlib/circuits/comparators.circom";
 include "../node_modules/circomlib/circuits/bitify.circom";
 
 /**
- * TrackRecord — proves win rate and total return over N signals
+ * TrackRecord — proves win count and total return over N signals
  *
  * Public inputs (what everyone sees):
- *   - winRateBps      : wins / totalSignals * 10000
- *   - totalReturnBps  : cumulative return in bps
- *   - totalSignals    : number of signals in this proof
+ *   - winCount        : number of winning signals (exact integer, no division)
+ *   - totalReturnBps  : cumulative return in bps (sum - N*5000)
+ *   - totalSignals    : number of real (non-padded) signals in this proof
  *   - commitmentRoot  : rolling Poseidon hash of all signal commitments
  *
  * Private inputs (never revealed):
@@ -27,14 +27,16 @@ include "../node_modules/circomlib/circuits/bitify.circom";
  *   1. Recomputes each commitment hash = Poseidon(signalId, direction, salt)
  *   2. Chains them into commitmentRoot = Poseidon(Poseidon(...), hash_i)
  *   3. Counts wins and sums returns
- *   4. Constrains winRateBps = wins * 10000 / N
- *   5. Constrains totalReturnBps = sum(returns) - N*5000  (remove offset)
+ *   4. Constrains winCount === winSum[N]  (exact, no division)
+ *   5. Constrains totalReturnBps === returnSum[N] - N*5000
+ *
+ * Win rate is computed off-chain: winCount * 10000 / totalSignals
  *
  * MVP: N = 100 (fixed-size, pad with dummy signals that have outcome=0, return=5000)
  */
 template TrackRecord(N) {
     // Public
-    signal input winRateBps;
+    signal input winCount;
     signal input totalReturnBps;
     signal input totalSignals;
     signal input commitmentRoot;
@@ -85,10 +87,9 @@ template TrackRecord(N) {
     }
 
     // ── Step 3: Constrain public stats ─────────────────────────────────────
-    // totalSignals is the number of real (non-padded) signals.
-    // winRateBps = wins / totalSignals * 10000
-    // Circuit avoids division: winRateBps * totalSignals === winSum[N] * 10000
-    winRateBps * totalSignals === winSum[N] * 10000;
+    // winCount is exact integer wins — no division, avoids truncation mismatch.
+    // Win rate bps is computed off-chain: winCount * 10000 / totalSignals
+    winCount === winSum[N];
 
     // totalReturnBps = sum of real returns - real_count * 5000.
     // Padded signals have return=5000 (offset zero), so they contribute 0 net.
@@ -99,4 +100,4 @@ template TrackRecord(N) {
     totalReturnBps === returnSum[N] - N * 5000;
 }
 
-component main {public [winRateBps, totalReturnBps, totalSignals, commitmentRoot]} = TrackRecord(100);
+component main {public [winCount, totalReturnBps, totalSignals, commitmentRoot]} = TrackRecord(100);

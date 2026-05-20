@@ -66,27 +66,28 @@ async function main() {
   const { ethers } = require("ethers");
   const realSignals = raw; // original array before padding
   const onChainSignalIds = realSignals.map(s => s.signalId);
-  const onChainHashes = realSignals.map(s =>
-    ethers.solidityPackedKeccak256(
+  const onChainHashes = realSignals.map(s => {
+    // assetId = keccak256(asset string), matching CommitReveal.reveal() on-chain
+    const assetId = s.assetId || ethers.utils.keccak256(ethers.utils.toUtf8Bytes(s.asset || ""));
+    return ethers.utils.solidityKeccak256(
       ["bytes32", "uint8", "bytes32", "bytes32"],
-      [s.signalId, s.direction, s.assetId, s.salt]
-    )
-  );
+      [s.signalId, s.direction, assetId, s.salt]
+    );
+  });
 
   // Compute public stats
   const realCount = BigInt(raw.length);
   // Only count wins/returns from real (non-padded) signals
-  const wins = outcomes.slice(0, Number(realCount)).reduce((a, b) => a + b, 0n);
+  const winCount = outcomes.slice(0, Number(realCount)).reduce((a, b) => a + b, 0n);
   const realReturnSum = returns.slice(0, Number(realCount)).reduce((a, b) => a + b, 0n);
   // Padded signals have return=5000 (neutral), so full returnSum[N] = realReturnSum + pad*5000
   const returnSum = realReturnSum + (BigInt(N) - realCount) * RETURN_OFFSET;
   const totalSignals = realCount;
-  const winRateBps = realCount > 0n ? (wins * 10000n) / totalSignals : 0n;
   // totalReturnBps = returnSum[N] - N*5000 (matches circuit constraint)
   const totalReturnBps = returnSum - BigInt(N) * RETURN_OFFSET;
 
   const input = {
-    winRateBps: winRateBps.toString(),
+    winCount: winCount.toString(),
     totalReturnBps: totalReturnBps.toString(),
     totalSignals: totalSignals.toString(),
     commitmentRoot: root.toString(),
@@ -120,7 +121,7 @@ async function main() {
     onChainSignalIds,
     onChainHashes,
     stats: {
-      winRateBps: winRateBps.toString(),
+      winCount: winCount.toString(),
       totalReturnBps: totalReturnBps.toString(),
       totalSignals: totalSignals.toString(),
       commitmentRoot: root.toString(),
@@ -129,7 +130,8 @@ async function main() {
 
   fs.writeFileSync(outPath, JSON.stringify(output, null, 2));
   console.log(`Proof written to ${outPath}`);
-  console.log(`Win rate: ${winRateBps}bps (${Number(winRateBps)/100}%)`);
+  const winRateBps = totalSignals > 0n ? (winCount * 10000n) / totalSignals : 0n;
+  console.log(`Wins: ${winCount}/${totalSignals} (${winRateBps}bps)`);
   console.log(`Total return: ${totalReturnBps}bps`);
 }
 

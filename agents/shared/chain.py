@@ -7,7 +7,10 @@ import json
 import os
 from pathlib import Path
 from web3 import Web3
-from web3.middleware import ExtraDataToPOAMiddleware
+try:
+    from web3.middleware import ExtraDataToPOAMiddleware as _POAMiddleware
+except ImportError:
+    from web3.middleware import geth_poa_middleware as _POAMiddleware  # web3 < 7
 from eth_account import Account
 
 from .config import ARC_RPC_URL, ARC_CHAIN_ID
@@ -23,7 +26,7 @@ def _load_abi(contract_name: str) -> list:
 
 def get_web3() -> Web3:
     w3 = Web3(Web3.HTTPProvider(ARC_RPC_URL))
-    w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
+    w3.middleware_onion.inject(_POAMiddleware, layer=0)
     return w3
 
 
@@ -121,8 +124,24 @@ class SignalMarketContract:
             Web3.to_checksum_address(provider)
         ).call()
         return {
-            "winRateBps": stats[0],
+            "winCount": stats[0],
             "totalReturnBps": stats[1],
             "totalSignals": stats[2],
             "lastProofBlock": stats[3],
         }
+
+    def submit_stats_proof(
+        self,
+        account: Account,
+        pA: list,
+        pB: list,
+        pC: list,
+        pub_signals: list,
+        signal_ids: list[bytes],
+        hashes: list[bytes],
+    ) -> str:
+        """Submit a Groth16 proof of track record on-chain."""
+        tx = self.contract.functions.submitStatsProof(
+            pA, pB, pC, pub_signals, signal_ids, hashes
+        ).build_transaction({"from": account.address})
+        return send_tx(self.w3, account, tx)

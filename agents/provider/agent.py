@@ -196,6 +196,7 @@ class ProviderAgent:
 
     async def _reveal_loop(self):
         """Checks pending signals; reveals those past the delay window."""
+        ZK_PROOF_EVERY_N = int(os.environ.get("ZK_PROOF_EVERY_N_SIGNALS", "10"))
         while True:
             now = time.time()
             to_reveal = [
@@ -205,6 +206,15 @@ class ProviderAgent:
             for sig in to_reveal:
                 await self._reveal_signal(sig)
                 del self.pending[sig.signal_id]
+
+            # Auto-submit ZK proof every N reveals
+            if (
+                len(self.signal_history) > 0
+                and len(self.signal_history) % ZK_PROOF_EVERY_N == 0
+            ):
+                log.info(f"Triggering ZK proof at {len(self.signal_history)} signals")
+                await self.submit_zk_proof()
+
             await asyncio.sleep(60)
 
     async def _reveal_signal(self, sig: PendingSignal):
@@ -239,6 +249,7 @@ class ProviderAgent:
 
         self.signal_history.append({
             "signalId": sig.signal_id,
+            "asset": sig.asset,
             "direction": sig.direction,
             "salt": sig.salt,
             "outcome": 1 if outcome else 0,
@@ -271,6 +282,86 @@ class ProviderAgent:
         with open(path, "w") as f:
             json.dump(self.signal_history, f, indent=2)
         log.info(f"Signal history saved to {path} ({len(self.signal_history)} signals)")
+
+    async def submit_zk_proof(self):
+        """
+        Generates a Groth16 proof of track record and submits it on-chain.
+        Requires at least 1 revealed signal and the circuit build artifacts.
+        Called automatically after every 10 reveals (or on demand).
+        """
+        import json
+        import subprocess
+        import tempfile
+        import os as _os
+
+        if len(self.signal_history) < 1:
+            log.info("Not enough signals for ZK proof yet")
+            return
+
+        # Write current signal history to a temp file
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(self.signal_history, f)
+            signals_path = f.name
+
+        proof_path = signals_path.replace(".json", "_proof.json")
+
+        try:
+            circuits_dir = _os.path.join(
+                _os.path.dirname(__file__), "..", "..", "circuits"
+            )
+            result = subprocess.run(
+                ["node", "scripts/prove.js", "--signals", signals_path, "--out", proof_path],
+                cwd=circuits_dir,
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+            if result.returncode != 0:
+                log.error(f"Proof generation failed: {result.stderr}")
+                return
+
+            log.info(f"Proof generated:\n{result.stdout}")
+
+            with open(proof_path) as f:
+                proof_data = json.load(f)
+
+            # snarkjs proof values are decimal strings (not hex)
+            proof = proof_data["proof"]
+            pub = proof_data["publicSignals"]
+
+            pA = [int(proof["pi_a"][0]), int(proof["pi_a"][1])]
+            pB = [
+                [int(proof["pi_b"][0][1]), int(proof["pi_b"][0][0])],
+                [int(proof["pi_b"][1][1]), int(proof["pi_b"][1][0])],
+            ]
+            pC = [int(proof["pi_c"][0]), int(proof["pi_c"][1])]
+            pub_signals = [int(x) for x in pub]
+
+            # Build signal IDs and hashes for on-chain batch verification
+            from web3 import Web3
+            on_chain_signal_ids = proof_data["onChainSignalIds"]
+            on_chain_hashes = proof_data["onChainHashes"]
+
+            signal_id_bytes = [
+                bytes.fromhex(s.lstrip("0x").zfill(64)) for s in on_chain_signal_ids
+            ]
+            hash_bytes = [
+                bytes.fromhex(h.lstrip("0x").zfill(64)) for h in on_chain_hashes
+            ]
+
+            tx = self.signal_market.submit_stats_proof(
+                self.account, pA, pB, pC, pub_signals, signal_id_bytes, hash_bytes
+            )
+            log.info(f"ZK proof submitted on-chain: tx={tx[:10]}")
+
+        except Exception as e:
+            log.error(f"ZK proof submission failed: {e}")
+        finally:
+            for p in [signals_path, proof_path]:
+                try:
+                    _os.unlink(p)
+                except FileNotFoundError:
+                    pass
 
 
 async def main():

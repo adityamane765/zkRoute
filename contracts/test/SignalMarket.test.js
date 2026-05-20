@@ -198,14 +198,15 @@ describe("SignalMarket — submitStatsProof (stub verifier)", function () {
     await commitAndReveal(cr, providerWallet, c);
 
     const pA = [0n, 0n], pB = [[0n, 0n], [0n, 0n]], pC = [0n, 0n];
-    // totalSignals=1 matches signalIds.length=1; MockVerifier always returns true
-    const pub = [6800n, 230n, 1n, 0n];
+    // pubSignals: [winCount, totalReturnBps, totalSignals, commitmentRoot]
+    // winCount=1, totalSignals=1 → 100% win rate
+    const pub = [1n, 230n, 1n, 0n];
     await expect(
       market.connect(providerWallet).submitStatsProof(pA, pB, pC, pub, [c.signalId], [c.hash])
     ).to.emit(market, "StatsProofSubmitted");
 
     const stats = await market.getProviderStats(providerWallet.address);
-    expect(stats.winRateBps).to.equal(6800n);
+    expect(stats.winCount).to.equal(1n);
   });
 
   it("rejects when signal batch fails verification (unrevealed)", async () => {
@@ -214,7 +215,7 @@ describe("SignalMarket — submitStatsProof (stub verifier)", function () {
     await cr.connect(providerWallet).commit(c.signalId, c.hash); // committed but NOT revealed
 
     const pA = [0n, 0n], pB = [[0n, 0n], [0n, 0n]], pC = [0n, 0n];
-    const pub = [6800n, 230n, 1n, 0n];
+    const pub = [1n, 230n, 1n, 0n];
     await expect(
       market.connect(providerWallet).submitStatsProof(pA, pB, pC, pub, [c.signalId], [c.hash])
     ).to.be.revertedWith("signal batch mismatch");
@@ -226,7 +227,7 @@ describe("SignalMarket — submitStatsProof (stub verifier)", function () {
     await commitAndReveal(cr, providerWallet, c);
 
     const pA = [0n, 0n], pB = [[0n, 0n], [0n, 0n]], pC = [0n, 0n];
-    const pub = [6800n, 230n, 5n, 0n]; // claims 5 signals but only 1 provided
+    const pub = [1n, 230n, 5n, 0n]; // claims 5 signals but only 1 provided
     await expect(
       market.connect(providerWallet).submitStatsProof(pA, pB, pC, pub, [c.signalId], [c.hash])
     ).to.be.revertedWith("signal count mismatch");
@@ -238,7 +239,7 @@ describe("SignalMarket — submitStatsProof (stub verifier)", function () {
     await commitAndReveal(cr, providerWallet, c);
 
     const pA = [0n, 0n], pB = [[0n, 0n], [0n, 0n]], pC = [0n, 0n];
-    const pub = [6800n, 230n, 1n, 0n];
+    const pub = [1n, 230n, 1n, 0n];
     await market.connect(providerWallet).submitStatsProof(pA, pB, pC, pub, [c.signalId], [c.hash]);
     await expect(
       market.connect(providerWallet).submitStatsProof(pA, pB, pC, pub, [c.signalId], [c.hash])
@@ -251,9 +252,10 @@ describe("SignalMarket — submitStatsProof (stub verifier)", function () {
     await commitAndReveal(cr, providerWallet, c);
 
     const pA = [0n, 0n], pB = [[0n, 0n], [0n, 0n]], pC = [0n, 0n];
-    const pub = [10_001n, 0n, 1n, 0n];
+    // winCount=2 > totalSignals=1 → invalid
+    const pub = [2n, 0n, 1n, 0n];
     await expect(
       market.connect(providerWallet).submitStatsProof(pA, pB, pC, pub, [c.signalId], [c.hash])
-    ).to.be.revertedWith("invalid winRate");
+    ).to.be.revertedWith("winCount > totalSignals");
   });
 });

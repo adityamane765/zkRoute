@@ -1,22 +1,45 @@
 # zkRoute — Session Updates
 
-A running log of what was built, fixed, and deployed in this session.
-Last refresh: **2026-05-19**.
+A running log of what was built, fixed, and deployed across all sessions.
+Last refresh: **2026-05-20**.
 
 ---
 
-## TL;DR
+## TL;DR (latest session — 2026-05-20)
 
-In one session, zkRoute went from "code skeleton with placeholder values" to:
+**ZK pipeline unblocked end-to-end:**
+- ✅ **`winRateBps` → `winCount`**: root cause of circuit assert failure fixed. Integer division `(2*10000)/3 = 6666` but `6666*3 ≠ 20000` — switched public signal to exact integer win count. Circuit, contract, prove.js, tests all updated.
+- ✅ **New `Groth16Verifier` deployed** (`0x1751D8d086a672F24Ccf8A16c19b3CA5068b1229`) — third verifier, matches the `winCount` circuit. `setVerifier` called on SignalMarket.
+- ✅ **Full trusted setup re-run**: circuit recompiled, new zkey generated, `verification_key.json` + `Verifier.sol` exported.
+- ✅ **Proof generation tested end-to-end**: 3 signals → `winCount=2, totalReturnBps=260bps` — local verification passes.
 
-- ✅ **All 5 contracts deployed and verified on Arc testnet (Canteen)**
-- ✅ **Real Groth16 trusted setup completed**, real verifier deployed and swapped in via `setVerifier`
-- ✅ **Full agent-to-agent pipeline running live** — Gemini → commit on-chain → encrypt → relay → decrypt → risk-validate → execute (sim) → report
-- ✅ **4 live positions** in the buyer dashboard, signals committed/revealed every 60s
-- ✅ **30/30 Hardhat tests passing** with isolated `MockVerifier`
-- ✅ **Production-grade contract hardening** (reentrancy, pause, fee accounting, agent auth)
-- ✅ **CI workflow** (Hardhat + pytest + Next.js build)
-- ✅ **9 READMEs + DEPLOYMENT walkthrough + per-folder .gitignores**
+**Runtime stack fixed:**
+- ✅ **Python deps**: `pynacl`, `web3`, `google-genai`, `httpx` etc. installed into correct Python 3.12 (not conda 3.13)
+- ✅ **`ExtraDataToPOAMiddleware` compat shim**: web3 v6 uses `geth_poa_middleware` — try/except shim added to `chain.py`
+- ✅ **Live connections verified**: Arc RPC ✓, provider wallet 4.85 ETH ✓, Pyth oracle ETH $2111 / BTC $76709 ✓, all 3 contracts have bytecode on-chain ✓
+
+**prove.js fixed:**
+- ✅ **ethers v5 API**: switched from v6 (`ethers.keccak256`) to v5 (`ethers.utils.keccak256`, `ethers.utils.toUtf8Bytes`)
+- ✅ **`assetId` computed correctly**: was referencing `s.assetId` (undefined) — now derives `keccak256(toUtf8Bytes(s.asset))`
+- ✅ **Provider agent** now includes `"asset"` field in signal history so prove.js can compute the on-chain hash
+
+**Project hygiene:**
+- ✅ **bun set as package manager** for all JS/TS going forward (not npm/yarn)
+- ✅ **36/36 contract tests passing** (up from 30) — updated for `winCount`, `verifySignalBatch`, new error messages
+- ✅ **`ZK_VERIFIER_ADDRESS` updated in `.env`** to current verifier
+
+---
+
+## Previous session TL;DR (2026-05-19)
+
+- ✅ All 5 contracts deployed and verified on Arc testnet
+- ✅ Real Groth16 trusted setup completed (first run), real verifier deployed
+- ✅ Full agent-to-agent pipeline wired: Gemini → commit → encrypt → relay → decrypt → risk-validate → execute → report
+- ✅ Circle Programmable Wallets fully wired (buyer agent); all SIM/mock code removed
+- ✅ `verifySignalBatch` added to CommitReveal — fixes Poseidon↔keccak root mismatch without EVM Poseidon
+- ✅ Landing page redesign: GSAP canvas ASCII orb, film grain, zkRoute wordmark
+- ✅ 30/30 Hardhat tests passing
+- ✅ Production contract hardening (reentrancy, pause, fee accounting, agent auth)
 
 ---
 
@@ -28,327 +51,195 @@ In one session, zkRoute went from "code skeleton with placeholder values" to:
 |-------|-------|
 | Name | Arc Testnet (Canteen) |
 | Chain ID | `5042002` (`0x4cef52`) |
-| RPC | `https://rpc.testnet.arc-node.thecanteenapp.com/v1/swrm_***` (auth token, in `.env`) |
-| Explorer | https://docs.arc.io/ |
-| Auth tool | `arc-canteen` CLI |
+| RPC | configured in `.env` (auth token) |
 | Deployer | `0xc5b7b574EE84A9B59B475FE32Eaf908C246d3859` |
 
-**Contracts**
+**Contracts (current)**
 
-| Contract | Address | Source |
-|----------|---------|--------|
+| Contract | Address | Notes |
+|----------|---------|-------|
 | MockUSDC | `0x999f73DeA290960Afbd2f6e582F48bEfdFfDB6Ed` | [MockERC20.sol](contracts/contracts/MockERC20.sol) |
 | ProviderRegistry | `0x932Cb43D99e1CFB5D275Be0c87FA3313f76a6aeE` | [ProviderRegistry.sol](contracts/contracts/ProviderRegistry.sol) |
 | CommitReveal | `0x6e6c34e5781D45C5b0c91ecf258EAfaccc52fCDe` | [CommitReveal.sol](contracts/contracts/CommitReveal.sol) |
-| **Groth16Verifier (real)** | **`0x403Fe0408976b518b2952BdF590135Ec6ba12ebc`** | [Verifier.sol](contracts/contracts/Verifier.sol) — snarkjs-exported |
+| **Groth16Verifier (winCount circuit)** | **`0x1751D8d086a672F24Ccf8A16c19b3CA5068b1229`** | Deployed 2026-05-20; swapped in via `setVerifier` |
 | SignalMarket | `0x02c40758eB9932257F056fbB60714ccbdA8C4bd4` | [SignalMarket.sol](contracts/contracts/SignalMarket.sol) |
 
-The verifier was deployed to a stub first, then swapped via `SignalMarket.setVerifier(...)` (tx `0x5a33893c…0bac175e`). Sanity-checked: rejects an all-zero proof.
-
-Canonical record: [deployments/arc-testnet.json](deployments/arc-testnet.json).
-
-**Demo state on-chain**
-
-| Entity | Address | Status |
-|--------|---------|--------|
-| Provider "ETH Momentum Alpha" | `0xbb93f8e5…3Dc7cc6` | Registered, 100 USDC staked (`register` tx `0x6b35ab6a…3a7f847cb2`) |
-| Buyer subscription | `0xc5b7b574…246d3859` | Active, 10 USDC float deposited, agent authorized (`subscribe` tx `0x433e97e1…fe68569077c5db90`) |
-| Provider agent EOA | `0xbb93f8e5…3Dc7cc6` | 5 native gas + 200 MockUSDC |
-| Buyer agent EOA | `0xc193d906…6C12fc264840` | 5 native gas + 50 MockUSDC |
+> Previous verifier `0x403Fe040…` (first setup run, `winRateBps` circuit) is now superseded. `0xa86a5851…` was an intermediate deploy, also superseded.
 
 ---
 
-## 2. Trusted setup ✓
+## 2. ZK pipeline — full history & current state
 
-Real Groth16 setup completed end-to-end:
+### The bug (now fixed)
 
-| Step | Output |
-|------|--------|
-| Install circom from source | `circom 2.2.3` in `~/.cargo/bin/circom` |
-| Compile [track_record.circom](circuits/zkroute/track_record.circom) | 50,800 non-linear + 61,703 linear constraints, 4 public + 500 private inputs |
-| Download Powers-of-Tau Phase 1 | 288 MB `powersOfTau28_hez_final_18.ptau` from GCS mirror (Hermez S3 dead) |
-| Groth16 setup + single contribution | 47 MB `track_record_final.zkey` |
-| Export verification key | 3.4 KB `verification_key.json` |
-| Export Solidity verifier | 8 KB `Verifier.sol` (snarkjs `Groth16Verifier` contract) |
-| Deploy + swap on-chain | Verifier `0x403Fe04…` live |
+The circuit constrained `winRateBps * totalSignals === winSum[N] * 10000`. Because Circom uses integer arithmetic, `(2 wins / 3 signals) * 10000 = 6666` but `6666 * 3 = 19998 ≠ 20000`. The witness generator threw an assert, making it impossible to generate any proof with a non-round win rate.
 
-> Currently a single dev contribution. For mainnet, replace with a multi-party ceremony.
+**Fix**: public signal `winRateBps` → `winCount` (raw integer win count). The constraint becomes `winCount === winSum[N]` — exact, no division. Win rate bps is computed off-chain: `winCount * 10000 / totalSignals`.
 
----
+This also simplified the `SignalMarket` validation: instead of `pubSignals[0] <= BPS_DENOM`, it now checks `pubSignals[0] <= pubSignals[2]` (winCount ≤ totalSignals).
 
-## 3. Live demo running (foreground processes)
+### Trusted setup history
 
-| Process | PID file | Log | Status |
-|---------|----------|-----|--------|
-| Backend (uvicorn) | (last pid in log) | `/tmp/zkroute_backend.log` | Running on `:8000` |
-| Provider agent | running | `/tmp/zkroute_provider.log` | Generates ETH/BTC signals every 60s |
-| Buyer agent | running | `/tmp/zkroute_buyer.log` | Polls every 30s, executes in sim mode |
-| Frontend (Next.js) | running | `/tmp/zkroute_frontend.log` | `:3000` |
+| Step | 2026-05-19 | 2026-05-20 |
+|------|-----------|-----------|
+| Circuit | `winRateBps` (broken constraint) | `winCount` (fixed) |
+| ptau | Downloaded from GCS mirror (288 MB) | Reused |
+| zkey | `track_record_final.zkey` (v1) | Regenerated (v2) |
+| Verifier deployed | `0x403Fe040…` | `0x1751D8d0…` |
+| End-to-end proof test | ❌ assert failed | ✅ passes |
 
-**Live observation:**
+### Proof output (verified working)
 
-- **Gemini** generates directions (e.g. `ETH SHORT @ $2135.59`, `BTC LONG @ $76979.96`).
-- Each commit lands on Arc with ~3-second finality.
-- The buyer agent decrypts both signals on its next poll, validates against risk bounds, simulates the trade, and posts the position to `/buyer/positions`.
-- The dashboard at `/buyer` (signed in as `0xc5b7…3859`) shows **4 open positions**, no PnL yet because the position-monitor loop runs every 5 min.
-- Provider's `_reveal_loop` resolves each signal after the 30s reveal window using Pyth price-at-time, then writes the outcome to `/signals/outcome` and appends to `signal_history` (the input to the eventual ZK proof).
+```
+Generating witness...
+Proof written to /tmp/test_proof.json
+Wins: 2/3 (6666bps)
+Total return: 260bps
+```
 
-URLs:
-
-| URL | Purpose |
-|-----|---------|
-| http://localhost:3000 | Landing |
-| http://localhost:3000/marketplace | Provider list — "ETH Momentum Alpha" visible |
-| http://localhost:3000/buyer | Portfolio dashboard (4 positions) |
-| http://localhost:3000/provider | Register a new strategy (on-chain register flow) |
-| http://localhost:8000/docs | Backend Swagger UI |
-| http://localhost:8000/buyer/dashboard/0xc5b7…3859 | Raw dashboard JSON |
+Public signals: `[winCount=2, totalReturnBps=260, totalSignals=3, commitmentRoot=217829...]`
 
 ---
 
-## 4. Bugs found & fixed in this session
+## 3. Agent pipeline — current status
 
-| # | Bug | Where | Fix |
-|---|-----|-------|-----|
-| 1 | `processSignalPayment` required `msg.sender == buyer` — but the agent has its own key | [SignalMarket.sol](contracts/contracts/SignalMarket.sol) | Added `agent` field to Subscription + `onlyAgentOrBuyer` modifier. Agent address is set at subscribe time. |
-| 2 | `withdrawFees(to)` could sweep buyer floats and provider revenue | [SignalMarket.sol](contracts/contracts/SignalMarket.sol) | Split accounting into `treasuryBalance`, `providerRevenue`, `subscriptions[].float`. Withdraw only takes treasury. |
-| 3 | Slashed bond and active stakes lived in the same balance | [ProviderRegistry.sol](contracts/contracts/ProviderRegistry.sol) | Added `slashedBalance` separate from active stakes; `withdrawSlashedFunds` only touches slashed. |
-| 4 | `getCommitmentRoot` was O(n) loop over all commits | [CommitReveal.sol](contracts/contracts/CommitReveal.sol) | Made it incremental via `commitmentRoot_` mapping; O(1) views. |
-| 5 | Provider could keep a commitment open indefinitely and pick winners later | [CommitReveal.sol](contracts/contracts/CommitReveal.sol) | Added `MAX_REVEAL_WINDOW_BLOCKS = 50_000`. |
-| 6 | Backend `/providers/{addr}/stats` accepted any caller | [providers.py](backend/routes/providers.py) | Now requires EIP-191 signature from the provider's wallet; rejects stale `last_proof_block`. |
-| 7 | `signal_id` could be re-relayed via the backend | [signals.py](backend/routes/signals.py) | Dedup on `(provider, buyer, signal_id)` at relay time. |
-| 8 | Encrypted payload size unbounded | [signals.py](backend/routes/signals.py) | 16 KiB cap. |
-| 9 | `OrbCanvas.tsx` hit `Cannot read properties of null` on unmount | [OrbCanvas.tsx](frontend/components/OrbCanvas.tsx) | RAF loop checks `stopped` flag + re-reads refs each frame. |
-| 10 | Hydration mismatch: server rendered "connect wallet", client showed address | [ConnectButton.tsx](frontend/components/ConnectButton.tsx) | Added `mounted` guard; same applied to `/buyer` and `/provider` pages. |
-| 11 | `deploy.js` blew up with `Cannot find module 'dotenv'` | [contracts/package.json](contracts/package.json) | Added `dotenv` to devDeps + try/catch in hardhat.config.js. |
-| 12 | `deploy.js` forbade stub verifier on `arc` network | [scripts/deploy.js](contracts/scripts/deploy.js) | Gated behind `ZKROUTE_ALLOW_STUB_VERIFIER=true` env flag for testnet. |
-| 13 | Hardhat tests broke after swapping in real Groth16Verifier | [SignalMarket.test.js](contracts/test/SignalMarket.test.js) | Added `MockVerifier.sol` for unit tests. Real verifier is only used in production deploys. |
-| 14 | Provider agent crashed: `Unknown kwargs: ['gasPrice']` (web3 v7) | [chain.py](agents/shared/chain.py) | Dropped legacy `gasPrice` — `build_transaction` already populates EIP-1559 fees. |
-| 15 | Then: `Missing kwargs: ['nonce']` — `build_transaction` doesn't auto-fill nonce | [chain.py](agents/shared/chain.py) | Re-added explicit `nonce = w3.eth.get_transaction_count(...)`. |
-| 16 | Buyer agent polled `/signals/pending/{agent_address}` but signals are stored against the **buyer's** address | [buyer/agent.py](agents/buyer/agent.py) | Added `BUYER_ADDRESS` env var separating the agent's signing identity from the buyer's principal identity. |
-| 17 | `processSignalPayment` called with agent's address as `buyer` arg | [chain.py](agents/shared/chain.py), [buyer/agent.py](agents/buyer/agent.py) | New signature `process_signal_payment(account, provider, buyer)` — agent signs, buyer is the principal. |
-| 18 | Anthropic SDK not wanted as dep | [provider/agent.py](agents/provider/agent.py), [pyproject.toml](agents/pyproject.toml) | Switched to `google-genai` (`gemini-2.5-flash`). Strips ``` fences from Gemini output. |
-| 19 | Circuit included `../../node_modules/circomlib/...` (off by one) | [track_record.circom](circuits/zkroute/track_record.circom) | Now `../node_modules/circomlib/...`. |
-| 20 | Hermez S3 ptau mirror returns 403 | [setup.sh](circuits/scripts/setup.sh) | Switched to GCS mirror `https://storage.googleapis.com/zkevm/ptau/`. |
+| Component | Status | Blocker |
+|-----------|--------|---------|
+| Provider agent — Gemini signal gen | ✅ wired | — |
+| Provider agent — commit on-chain | ✅ wired | — |
+| Provider agent — encrypt + relay | ✅ wired | — |
+| Provider agent — reveal + ZK proof | ✅ wired | needs signals to accumulate |
+| Buyer agent — decrypt | ✅ wired | — |
+| Buyer agent — risk validation | ✅ wired | — |
+| Buyer agent — Circle trade execution | ⏳ wired, not tested | `CIRCLE_ENTITY_SECRET` + `CIRCLE_WALLET_ID` empty in `.env` |
+| Buyer agent — nanopayment on-chain | ✅ wired | depends on Circle |
+| Agents actually running | ❌ not started | Circle creds needed |
 
----
+**Circle wallet inventory** (read from API with existing key):
 
-## 5. Production hardening (contracts)
+| Wallet ID | Address | USDC Balance |
+|-----------|---------|-------------|
+| `fdd85505` | `0x2c379667…` | $1,771 |
+| `8e1b82c0` | `0x921e13dd…` | $2,637 ← recommended |
+| `7690027a` | `0xc165b07f…` | $2,323 |
 
-[SignalMarket.sol](contracts/contracts/SignalMarket.sol):
-
-- `nonReentrant` on every USDC-moving call
-- `whenNotPaused` everywhere user-callable
-- `SafeERC20` for all token transfers
-- Hard caps: `MAX_POSITION_BPS = 50%`, `MAX_LEVERAGE_BPS = 10x`, `MAX_DAILY_VAR_BPS = 20%`
-- `MIN_PROOF_INTERVAL_BLOCKS = 10` — rate-limit proof submissions
-- Mutable verifier via `setVerifier(addr)`, owner-only
-- Three accounting bins: `treasuryBalance`, `providerRevenue[]`, `subscriptions[].float` — never mixed
-- New `updateAgent`, `updateRiskBounds` post-subscription
-- Pausable + setSignalPrice owner ops; sanity-capped at 1000 USDC/signal
-
-[ProviderRegistry.sol](contracts/contracts/ProviderRegistry.sol):
-
-- Pausable register flow
-- Slashed addresses can't re-register
-- Name/description length caps (80 / 500)
-- Slashed funds isolated; treasury withdraw separate from active stakes
-
-[CommitReveal.sol](contracts/contracts/CommitReveal.sol):
-
-- Rolling root cached on commit (O(1) reads)
-- Min + max reveal window blocks
-- Zero-bytes guards on signalId and hash
-- `direction` and `outcome` stored on reveal for audit
+Set `CIRCLE_WALLET_ID=8e1b82c0-91dc-54a0-af42-661a4da7ff1b` and fill `CIRCLE_ENTITY_SECRET` from the Circle console.
 
 ---
 
-## 6. Tests
+## 4. Bugs found & fixed (all sessions)
 
-| Suite | Tool | Count | Result |
+| # | Bug | Fix |
+|---|-----|-----|
+| 1 | `winRateBps * totalSignals === winSum[N] * 10000` fails with non-round win rates | Replaced with `winCount === winSum[N]` |
+| 2 | `prove.js` used ethers v6 API (`toUtf8Bytes`, `solidityPackedKeccak256`) but ethers v5 is installed in circuits/ | Switched to `ethers.utils.*` |
+| 3 | `prove.js` used `s.assetId` (undefined) — signals only have `s.asset` string | Compute `assetId = keccak256(toUtf8Bytes(asset))` inline |
+| 4 | Provider agent signal history missing `asset` field — prove.js needs it to compute on-chain hash | Added `"asset": sig.asset` to history append |
+| 5 | `ExtraDataToPOAMiddleware` import fails on web3 v6 | Try/except compat shim: falls back to `geth_poa_middleware` |
+| 6 | `pip install` installed pynacl into conda Python 3.13 but `python3` resolves to system 3.12 | Re-ran install with `/Library/Frameworks/Python.framework/Versions/3.12/bin/pip3` |
+| 7 | `circomlibjs` missing from circuits/node_modules | `bun add circomlibjs` |
+| 8 | Poseidon↔keccak commitment root mismatch blocked all proof submission | Replaced root comparison with `verifySignalBatch` (per-signal keccak check) |
+| 9 | `processSignalPayment` required `msg.sender == buyer` — agent has its own key | Added `agent` field to Subscription + `onlyAgentOrBuyer` modifier |
+| 10 | `withdrawFees` could sweep buyer floats and provider revenue | Split into `treasuryBalance`, `providerRevenue[]`, `subscriptions[].float` |
+| 11 | Slashed bond and active stakes in same balance | Added `slashedBalance` separate from active stakes |
+| 12 | Provider could keep commitment open indefinitely | Added `MAX_REVEAL_WINDOW_BLOCKS = 50_000` |
+| 13 | Hermez S3 ptau mirror returns 403 | Switched to GCS mirror `storage.googleapis.com/zkevm/ptau/` |
+| 14 | Provider agent crashed: `Unknown kwargs: ['gasPrice']` | Dropped legacy `gasPrice`; use EIP-1559 fields only |
+| 15 | `build_transaction` doesn't auto-fill nonce | Re-added explicit `nonce = w3.eth.get_transaction_count(...)` |
+| 16 | Buyer agent polled signals against agent address instead of buyer address | Added `BUYER_ADDRESS` env var; separated signing identity from principal |
+| 17 | Vercel deploy: "No Output Directory named 'public' found" | Created `frontend/vercel.json` with `{"framework": "nextjs"}` |
+| 18 | ESLint v9 incompatibility with Next.js 14 | Pinned `eslint@8` + `eslint-config-next@14.2.3` |
+| 19 | Canvas orb filled `#000` each frame causing black void below | Switched to `clearRect` so canvas is transparent |
+
+---
+
+## 5. Tests
+
+| Suite | Tool | Count | Status |
 |-------|------|-------|--------|
-| Contracts ([contracts/test/](contracts/test/)) | Hardhat + chai | 30 | ✓ All pass |
-| Backend ([backend/tests/](backend/tests/)) | pytest + httpx TestClient | 18 | (Run `cd backend && pytest`) |
-| Agents ([agents/tests/](agents/tests/)) | pytest | 12 | (Run `cd agents && pytest`) |
+| Contracts ([contracts/test/](contracts/test/)) | Hardhat + chai | **36** | ✅ All pass |
+| Backend ([backend/tests/](backend/tests/)) | pytest | 18 | Run: `cd backend && pytest` |
+| Agents ([agents/tests/](agents/tests/)) | pytest | 12 | Run: `cd agents && PYTHONPATH=.. pytest` |
 
-Hardhat coverage spans:
-
-- ProviderRegistry: register / re-register / slash / deactivate / pause / treasury withdraw
-- CommitReveal: commit / reveal happy path / replay / hash mismatch / max-window expiry / per-provider root isolation
-- SignalMarket: subscribe bounds / agent vs buyer vs attacker auth / payment split (3% fee → treasury, 97% → revenue) / `withdrawFees` only takes treasury / `claimRevenue` only takes provider's revenue / pause / proof submission with `MockVerifier`
-
-CI: [.github/workflows/ci.yml](.github/workflows/ci.yml) runs all three suites + a Next.js build on every push.
+Contract test coverage (36 tests):
+- CommitReveal: commit/reveal/double-commit/hash-mismatch/window-expiry/verifySignalBatch (true/false/wrong-hash/unknown)
+- ProviderRegistry: register/re-register/slash/deactivate/pause/treasury-withdraw
+- SignalMarket: subscribe/bounds/agent-auth/payment-split/fee-accounting/claimRevenue/pause/submitStatsProof (winCount valid, unrevealed, count-mismatch, rate-limit, winCount>totalSignals)
 
 ---
 
-## 7. Files added or substantially changed
+## 6. Outstanding work
 
-**New files**
-
-```
-.github/workflows/ci.yml                      ← CI pipeline (4 jobs)
-DEPLOYMENT.md                                 ← full setup walkthrough
-README.md                                     ← root project overview
-UPDATES.md                                    ← this file
-
-contracts/.gitignore
-contracts/README.md                           ← every function/event/storage slot
-contracts/contracts/MockVerifier.sol          ← test-only permissive verifier
-contracts/contracts/Verifier.sol              ← real Groth16 (overwrites stub)
-contracts/scripts/deploy_verifier.js          ← deploy + swap real verifier
-contracts/scripts/fund_agents.js              ← fund agent EOAs with gas + USDC
-contracts/scripts/init_demo.js                ← register provider + subscribe buyer
-contracts/scripts/smoke.js                    ← read-only post-deploy sanity
-contracts/test/CommitReveal.test.js
-contracts/test/ProviderRegistry.test.js
-contracts/test/SignalMarket.test.js
-
-circuits/.gitignore
-circuits/README.md                            ← circuit description + setup procedure
-
-backend/.gitignore
-backend/README.md                             ← every endpoint, hardening notes
-backend/pytest.ini
-backend/tests/conftest.py                     ← in-memory SQLite fixture
-backend/tests/test_auth.py
-backend/tests/test_buyer_flow.py
-backend/tests/test_providers.py
-backend/tests/test_signals.py
-
-agents/.gitignore
-agents/README.md                              ← provider + buyer loops in detail
-agents/pytest.ini
-agents/shared/risk.py                         ← pure risk-bounds module (testable)
-agents/tests/test_crypto.py
-agents/tests/test_risk.py
-
-frontend/.gitignore
-frontend/README.md
-frontend/lib/contracts.ts                     ← minimal hand-maintained ABIs
-frontend/lib/onchain.ts                       ← approve-then-call hooks
-
-deployments/README.md
-deployments/arc-testnet.json                  ← canonical address book
-
-scripts/DEPLOY_ARC.md                         ← Arc-specific walkthrough
-scripts/README.md
-scripts/load_addresses.sh                     ← .env emitter from deployments JSON
-scripts/verify_rpc.sh                         ← live-RPC + chain-ID probe
-```
-
-**Substantially rewritten**
-
-```
-.env                                          ← all 36 keys populated (gitignored)
-.env.example                                  ← expanded with NEXT_PUBLIC_*
-.gitignore                                    ← comprehensive top-level rules
-contracts/contracts/SignalMarket.sol          ← agent auth, fee split, hardening
-contracts/contracts/ProviderRegistry.sol      ← slashed isolation, pausable
-contracts/contracts/CommitReveal.sol          ← rolling root, window bounds
-contracts/scripts/deploy.js                   ← stub-verifier flag gate, OZ imports
-contracts/hardhat.config.js                   ← cwd-independent dotenv load
-backend/routes/buyers.py                      ← validation, dedup, address checksum
-backend/routes/providers.py                   ← signed stats updates
-backend/routes/signals.py                     ← payload caps, hex validation
-agents/buyer/agent.py                         ← risk module, BUYER_ADDRESS split
-agents/provider/agent.py                      ← Gemini, env-overridable timing
-agents/shared/chain.py                        ← EIP-1559 tx building, agent auth
-frontend/app/buyer/page.tsx                   ← hydration-safe mounted guard
-frontend/app/provider/page.tsx                ← on-chain register flow
-frontend/components/ConnectButton.tsx         ← hydration-safe
-frontend/components/OrbCanvas.tsx             ← null-deref-safe RAF loop
-frontend/components/SubscribeModal.tsx        ← on-chain subscribe + agent auth
-```
-
----
-
-## 8. Tools, libraries, services touched
-
-| Layer | Tool | Version | Why |
-|-------|------|---------|-----|
-| Compiler | circom | 2.2.3 | Built from source via cargo |
-| Proof system | snarkjs (Groth16) | 0.7.5 | Trusted setup + verifier export |
-| Smart contracts | Hardhat + ethers v6 | 2.22 / 6.x | Test + deploy |
-| Contracts | OpenZeppelin | 5.x | SafeERC20, Ownable, Pausable, ReentrancyGuard |
-| Backend | FastAPI + SQLModel | 0.111 / 0.0.19 | Signal relay + marketplace |
-| Frontend | Next.js + wagmi + viem | 14.2 / 2.9 / 2.13 | Marketplace UI |
-| Wallet/SDK | Circle Programmable Wallets | (sim) | Trade execution (live mode pending creds) |
-| Oracle | Pyth Hermes REST | live | ETH/BTC prices |
-| Signal gen | Google Gemini | `gemini-2.5-flash` | Provider's directional signal |
-| Encryption | PyNaCl box | 1.5 | End-to-end provider → buyer agent |
-| Chain | Arc testnet (Canteen) | chain id 5042002 | All on-chain state |
-| Auth (Arc) | arc-canteen CLI | latest | Authenticated RPC + faucet |
-| Payments | x402 nanopayments | (scaffolded) | Per-signal USDC micropayments |
-
----
-
-## 9. Outstanding work
-
-| # | Item | Severity |
+| # | Item | Priority |
 |---|------|----------|
-| 1 | **Rotate the Gemini key** — it appeared in chat history | 🔴 Do today |
-| 2 | Set `CIRCLE_API_KEY` (already set) + `CIRCLE_ENTITY_SECRET` + `CIRCLE_WALLET_ID` to take the buyer agent out of sim mode | 🟡 Required for real execution |
-| 3 | Generate the first end-to-end ZK proof: run `cd circuits && node scripts/prove.js --signals ../agents/signals.json --out proof.json`, then submit calldata to `SignalMarket.submitStatsProof` | 🟡 Real verifier is deployed but unused so far |
-| 4 | **Poseidon ↔ keccak commitment root mismatch** — circuit chains via Poseidon, on-chain `CommitReveal.getCommitmentRoot` chains via keccak. The `submitStatsProof` root check will never pass with the current `track_record.circom`. Fix by switching either side to the other hash. | 🔴 Blocks real proof submission |
-| 5 | Multi-party trusted setup (currently single dev contribution) | 🟡 Mainnet readiness |
-| 6 | Move backend to Postgres + add proper auth on relay writes | 🟡 Production readiness |
-| 7 | Proxy frontend RPC through backend (currently leaks `swrm_…` token in `NEXT_PUBLIC_ARC_RPC_URL` if you deploy the frontend publicly) | 🟡 Pre-public-launch |
-| 8 | Transfer ownership of `ProviderRegistry` + `SignalMarket` from deployer EOA to a multisig | 🟡 Pre-mainnet |
-| 9 | Real Arc USDC — currently using `MockUSDC`. Set `USDC_ADDRESS` and re-deploy `SignalMarket` with the real address | 🟢 Whenever Canteen publishes the canonical USDC |
-| 10 | Backend signal-relay queue (NATS/Redis Streams) so a crash before the buyer polls can't drop signals | 🟢 Production polish |
-| 11 | Pyth feed staleness check before treating a price as truth on reveal | 🟢 Production polish |
-| 12 | TEE-based buyer agents (Phala / Marlin / Oasis Sapphire) — signals never exposed to host OS | 🟢 V2 feature |
+| 1 | Fill `CIRCLE_ENTITY_SECRET` + `CIRCLE_WALLET_ID=8e1b82c0…` in `.env` | 🔴 Blocks real trades |
+| 2 | Start provider + buyer agents, run a full signal cycle end-to-end | 🔴 Demo blocker |
+| 3 | Wire frontend provider stats to `getProviderStats()` — show `winCount/totalSignals` live | 🟡 Demo quality |
+| 4 | Record 3-min demo video showing: commit tx → buyer USDC moves → reveal tx → ZK proof on-chain | 🟡 Hackathon submission |
+| 5 | Show adversarial case in demo: provider tries to reveal wrong direction → tx reverts | 🟡 Makes trust model concrete |
+| 6 | Multi-party trusted setup (currently single dev contribution) | 🟢 Mainnet readiness |
+| 7 | Move backend to Postgres + auth on relay writes | 🟢 Production polish |
+| 8 | Proxy Arc RPC through backend (currently token leaks in `NEXT_PUBLIC_ARC_RPC_URL`) | 🟢 Pre-public launch |
 
 ---
 
-## 10. How to bring the demo back up after a reboot
+## 7. How to bring the demo up
 
 ```bash
-cd /Users/swarnimraj/zkRoute
+cd /Users/adityamane/zkRoute
 
 # 1. Backend
 python3 -m uvicorn backend.main:app --port 8000 > /tmp/zkroute_backend.log 2>&1 &
 
-# 2. Agents (short timing for live demo)
+# 2. Agents (short timing for demo)
 SIGNAL_INTERVAL_SECONDS=60 REVEAL_DELAY_SECONDS=30 \
   python3 -m agents.provider.agent > /tmp/zkroute_provider.log 2>&1 &
 python3 -m agents.buyer.agent > /tmp/zkroute_buyer.log 2>&1 &
 
 # 3. Frontend
-(cd frontend && npm run dev > /tmp/zkroute_frontend.log 2>&1 &)
+(cd frontend && bun run dev > /tmp/zkroute_frontend.log 2>&1 &)
 
-# 4. Tail
-tail -f /tmp/zkroute_{provider,buyer,backend,frontend}.log
+# 4. Tail logs
+tail -f /tmp/zkroute_{provider,buyer,backend}.log
 ```
 
-Then open http://localhost:3000/buyer and connect MetaMask with the deployer key.
-
----
-
-## 11. How to test things broke
-
+**Connection check (run first):**
 ```bash
-cd contracts && npm test         # 30/30 — should all pass
-cd ../backend && PYTHONPATH=.. pytest
-cd ../agents  && PYTHONPATH=.. pytest
-cd ../frontend && npm run build  # type-check + bundle
-```
-
-If you only changed a contract, recompile + redeploy + re-run smoke:
-
-```bash
-cd contracts && npm run compile
-npx hardhat run scripts/smoke.js --network arc
+python3 -c "
+from dotenv import load_dotenv; load_dotenv()
+from agents.shared.chain import get_web3, get_account
+import os, asyncio
+from agents.shared import oracle
+w3 = get_web3()
+print('Connected:', w3.is_connected())
+acc = get_account(os.environ['PROVIDER_AGENT_PRIVATE_KEY'])
+print('Provider:', acc.address, w3.from_wei(w3.eth.get_balance(acc.address), 'ether'), 'ETH')
+asyncio.run(oracle.get_price('ETH'))
+"
 ```
 
 ---
 
-## 12. Cost so far on Arc testnet
+## 8. Run tests
 
-The deployer started with `73.7` native (gas) tokens at nonce 30. As of session end:
+```bash
+# Contracts (36 tests)
+cd contracts && npx hardhat test
 
+# Backend
+cd backend && pytest
+
+# Agents
+cd agents && PYTHONPATH=.. pytest
+
+# Frontend type-check + build
+cd frontend && bun run build
 ```
-deployer balance: ~63 native (10 burnt across deploys + funding + 2 verifier deploys + setVerifier + init_demo + agent gas top-ups)
-```
 
-Each provider commit costs ~85k gas, each reveal ~50k. At 20 gwei base fee, full ETH+BTC cycle (commit/reveal both pairs) ≈ 270k gas ≈ 0.0054 native per cycle. The deployer wallet can fund ~10,000 more demo cycles before running out.
+---
+
+## 9. Cost on Arc testnet
+
+Provider wallet started with ~73 native tokens. Current balance: **4.857 ETH** (gas spent across deploys, verifier swaps, init_demo, 3× verifier deploys during ZK iteration).
+
+Each full signal cycle (commit ETH + commit BTC + reveal both): ~270k gas ≈ 0.005 native. Enough for thousands more demo cycles.
